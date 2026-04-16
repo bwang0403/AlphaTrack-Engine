@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AlphaTrack | Liquid Aether Signature</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #03050a; overflow-x: hidden; color: #f8fafc; }
+        
+        /* AETHER BACKGROUND */
+        .bk-blob { position: fixed; border-radius: 50%; filter: blur(150px); opacity: 0.15; z-index: -1; animation: drift 25s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+        .blob1 { background: #ff1e56; width: 65vw; height: 65vh; top: -15vh; left: -10vw; }
+        .blob2 { background: #0070f3; width: 55vw; height: 55vh; bottom: -15vh; right: -10vw; animation-delay: -5s; }
+        .blob3 { background: #0070f3; width: 45vw; height: 45vh; top: 35vh; right: 15vw; animation-delay: -10s; }
+        .blob4 { background: #ff1e56; width: 35vw; height: 35vh; bottom: 25vh; left: 25vw; animation-delay: -15s; }
+        @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(8vw, 8vh) scale(1.1); } }
+
+        /* SOFT GLASS ELEMENTS */
+        .glass { 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(40px); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            border-radius: 2.5rem; 
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* SOFT BUTTON & INPUTS */
+        .liquid-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .liquid-btn:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
+        .liquid-btn:active { transform: scale(0.92); background: rgba(255, 255, 255, 0.02); }
+
+        .glow-blue { text-shadow: 0 0 20px rgba(0, 112, 243, 0.4); }
+        .glow-red { text-shadow: 0 0 20px rgba(255, 30, 86, 0.4); }
+    </style>
+</head>
+<body class="p-8 antialiased">
+
+    <div class="bk-blob blob1"></div><div class="bk-blob blob2"></div>
+    <div class="bk-blob blob3"></div><div class="bk-blob blob4"></div>
+
+    <div class="max-w-6xl mx-auto relative z-10">
+        <header class="flex flex-col lg:flex-row justify-between items-center mb-12 glass p-8 shadow-2xl">
+            <div class="text-center lg:text-left">
+                <h1 class="text-2xl font-black text-white tracking-tighter italic uppercase">AlphaTrack <span class="text-blue-500 font-light italic">Liquid</span></h1>
+                <p class="text-[9px] text-zinc-500 font-mono tracking-[0.4em] uppercase mt-1">Gainesville Research • Aether UI v2.7</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-4 bg-white/5 p-2 rounded-full border border-white/5 shadow-inner mt-6 lg:mt-0">
+                <input id="tickerInput" value="NVDA" class="bg-transparent border-none px-6 py-2 w-32 font-black text-blue-400 uppercase focus:outline-none text-xl placeholder-zinc-700">
+                
+                <div class="h-8 w-[1px] bg-white/10 hidden md:block"></div>
+                
+                <select id="periodInput" class="bg-zinc-900/40 rounded-full px-5 py-2 text-[10px] font-black border border-white/5 text-zinc-400 focus:outline-none cursor-pointer hover:text-white hover:bg-zinc-800 transition-all">
+                    <optgroup label="Swing">
+                        <option value="5d">5 Days</option><option value="1mo">1 Month</option>
+                    </optgroup>
+                    <optgroup label="Trend">
+                        <option value="3mo">3 Months</option><option value="6mo" selected>6 Months</option><option value="ytd">YTD</option>
+                    </optgroup>
+                    <optgroup label="Macro">
+                        <option value="1y">1 Year</option><option value="5y">5 Years</option>
+                    </optgroup>
+                </select>
+
+                <button onclick="fetchData()" id="btn" class="liquid-btn bg-blue-600/80 text-white px-10 py-3.5 rounded-full font-black text-xs uppercase tracking-widest shadow-lg">Execute</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12">
+            <div class="lg:col-span-3 glass p-16 flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                <span id="periodBadge" class="text-[9px] uppercase tracking-[0.8em] font-light mb-10 text-zinc-600 group-hover:text-blue-400 transition-colors">Aether Intelligence Stream</span>
+                <h2 id="adviceDisplay" class="text-[9rem] font-black tracking-tighter leading-none italic transition-all duration-1000 text-zinc-800">IDLE</h2>
+                <div id="priceDisplay" class="mt-10 text-xs font-mono tracking-[0.4em] text-zinc-500 uppercase">System Ready</div>
+            </div>
+
+            <div class="glass p-8 flex flex-col shadow-2xl hover:border-white/20 transition-all">
+                <h3 class="text-[10px] uppercase font-bold text-zinc-600 mb-6 tracking-widest border-b border-white/5 pb-2">Database Logs</h3>
+                <div id="signalHistory" class="space-y-5 text-[10px] font-mono tracking-wider">--</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div class="glass p-8 flex justify-between items-center shadow-lg group">
+                <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-zinc-600 italic group-hover:text-zinc-400 transition-colors">Volatility</p>
+                <p id="volVal" class="text-2xl font-bold text-white">--</p>
+            </div>
+            <div class="glass p-8 flex justify-between items-center shadow-lg border-l-4 border-blue-500/40">
+                <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-zinc-600 italic">Target Prof</p>
+                <p id="tpVal" class="text-2xl font-bold text-blue-400 glow-blue">--</p>
+            </div>
+            <div class="glass p-8 flex justify-between items-center shadow-lg border-l-4 border-rose-500/40">
+                <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-zinc-600 italic">Stop Loss</p>
+                <p id="slVal" class="text-2xl font-bold text-rose-500 glow-red">--</p>
+            </div>
+        </div>
+
+        <div class="glass p-10 h-[550px] mb-12 shadow-inner relative group">
+            <canvas id="myChart"></canvas>
+        </div>
+        
+        <footer class="text-center text-zinc-800 text-[8px] tracking-[0.8em] font-light italic pb-10 uppercase">
+            AlphaTrack S-Tier Architecture • Created by Bruce Wang
+        </footer>
+    </div>
+
+    <script>
+        // --- ALPHA-SONIC ENGINE (Apple Signature Sound) ---
+        const AudioEngine = {
+            ctx: null,
+            init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            playClick() {
+                this.init();
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+            },
+            playBuy() {
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(f, now + i * 0.08);
+                    gain.gain.setValueAtTime(0, now + i * 0.08);
+                    gain.gain.linearRampToValueAtTime(0.05, now + i * 0.08 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.4);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.5);
+                });
+            },
+            playSell() {
+                const now = this.ctx.currentTime;
+                [392.00, 329.63, 261.63].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                    osc.type = i === 2 ? 'triangle' : 'sine';
+                    osc.frequency.setValueAtTime(f, now + i * 0.12);
+                    gain.gain.setValueAtTime(0, now + i * 0.12);
+                    gain.gain.linearRampToValueAtTime(0.06, now + i * 0.12 + 0.04);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.6);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.12); osc.stop(now + i * 0.12 + 0.7);
+                });
+            },
+            playSignal(type) {
+                this.init();
+                if (type.includes('BUY')) this.playBuy();
+                else if (type.includes('SELL')) this.playSell();
+                else {
+                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.5);
+                }
+            }
+        };
+
+        const API_URL = "https://0yhmf4tyhf.execute-api.us-east-2.amazonaws.com/default/AlphaTrackEngine";
+        let chart;
+
+        async function fetchData() {
+            AudioEngine.playClick();
+            const ticker = document.getElementById('tickerInput').value.toUpperCase();
+            const period = document.getElementById('periodInput').value;
+            const btn = document.getElementById('btn');
+            btn.innerText = "EXECUTING"; btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}?ticker=${ticker}&period=${period}`);
+                const body = await response.json();
+                const data = typeof body.body === "string" ? JSON.parse(body.body) : body;
+                
+                setTimeout(() => {
+                    AudioEngine.playSignal(data.current.advice);
+                    updateUI(data);
+                    renderChart(ticker, data);
+                }, 200);
+            } catch (err) { alert("CLOUD LINK BROKEN"); } 
+            finally { btn.innerText = "Execute"; btn.disabled = false; }
+        }
+
+        function updateUI(body) {
+            const { current, history_signals, ticker, period } = body;
+            const adviceCard = document.getElementById('adviceDisplay');
+            adviceCard.innerText = current.advice;
+            
+            if (current.advice.includes('BUY')) {
+                adviceCard.className = "text-[9rem] font-black tracking-tighter italic text-blue-400 transition-all duration-1000 glow-blue";
+            } else if (current.advice.includes('SELL')) {
+                adviceCard.className = "text-[9rem] font-black tracking-tighter italic text-rose-500 transition-all duration-1000 glow-red";
+            } else {
+                adviceCard.className = "text-[9rem] font-black tracking-tighter italic text-zinc-700 transition-all duration-1000";
+            }
+
+            document.getElementById('periodBadge').innerText = `${ticker} • ${period} LIVE FEED`;
+            document.getElementById('priceDisplay').innerText = `${ticker} VALUE: $${current.price}`;
+            document.getElementById('volVal').innerText = `${current.vol}%`;
+            document.getElementById('tpVal').innerText = `$${current.tp}`;
+            document.getElementById('slVal').innerText = `$${current.sl}`;
+
+            document.getElementById('signalHistory').innerHTML = history_signals.map(item => `
+                <div class="flex justify-between py-2 border-b border-white/5 opacity-60 hover:opacity-100 transition-opacity">
+                    <span class="text-zinc-500">${item.timestamp.split('T')[0].slice(5)}</span>
+                    <span class="${item.advice.includes('BUY') ? 'text-blue-400' : 'text-rose-500'} font-bold">${item.advice}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderChart(ticker, body) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                data: {
+                    datasets: [
+                        { type: 'line', data: body.history, borderColor: 'rgba(255, 255, 255, 0.4)', borderWidth: 1, pointRadius: 0, fill: true, backgroundColor: 'rgba(255, 255, 255, 0.01)', tension: 0.4 },
+                        { type: 'scatter', data: body.data.supports.map(s => ({x: s.date, y: s.price})), backgroundColor: '#0070f3', pointRadius: 4 },
+                        { type: 'scatter', data: body.data.resistances.map(r => ({x: r.date, y: r.price})), backgroundColor: '#ff1e56', pointRadius: 4 }
+                    ]
+                },
+                options: { 
+                    responsive: true, maintainAspectRatio: false, 
+                    scales: { 
+                        x: { display: false }, 
+                        y: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#475569', font: { family: 'monospace' } } } 
+                    }, 
+                    plugins: { legend: { display: false } } 
+                }
+            });
+        }
+    </script>
+</body>
+</html>
