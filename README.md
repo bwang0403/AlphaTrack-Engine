@@ -5,6 +5,11 @@
 
 The interface features a bespoke **"Aether Liquid"** UI, combining high-end glassmorphism with synthesized haptic audio feedback.
 
+## 🔗 Live Demo
+[**Click here to launch the AlphaTrack Terminal**](arn:aws:lambda:us-east-2:986263532810:function:AlphaTrackEngine)
+
+> **Note:** Since this is a serverless application, the first request might take a few seconds to wake up the AWS Lambda function.
+
 ---
 
 ## 🏗 System Architecture
