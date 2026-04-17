@@ -40,111 +40,84 @@
         .glow-red { text-shadow: 0 0 20px rgba(255, 30, 86, 0.4); }
     </style>
 </head>
-<body class="p-8 antialiased">
+<body class="antialiased h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth">
 
     <div class="bk-blob blob1"></div><div class="bk-blob blob2"></div>
     <div class="bk-blob blob3"></div><div class="bk-blob blob4"></div>
 
-    <div class="max-w-6xl mx-auto relative z-10">
-        <header class="flex flex-col lg:flex-row justify-between items-center mb-12 glass p-8 shadow-2xl">
-            <div class="text-center lg:text-left">
-                <h1 class="text-2xl font-black text-white tracking-tighter italic uppercase">AlphaTrack <span class="text-blue-500 font-light italic">Liquid</span></h1>
-                <p class="text-[9px] text-zinc-500 font-mono tracking-[0.4em] uppercase mt-1">Gainesville Research • Aether UI v2.7</p>
-            </div>
-            
-            <div class="flex flex-wrap items-center gap-4 bg-white/5 p-2 rounded-full border border-white/5 shadow-inner mt-6 lg:mt-0">
-                <input id="tickerInput" value="NVDA" class="bg-transparent border-none px-6 py-2 w-32 font-black text-blue-400 uppercase focus:outline-none text-xl placeholder-zinc-700">
-                
-                <div class="h-8 w-[1px] bg-white/10 hidden md:block"></div>
-                
-                <select id="periodInput" class="bg-zinc-900/40 rounded-full px-5 py-2 text-[10px] font-black border border-white/5 text-zinc-400 focus:outline-none cursor-pointer hover:text-white hover:bg-zinc-800 transition-all">
-                    <optgroup label="Swing">
-                        <option value="5d">5 Days</option><option value="1mo">1 Month</option>
-                    </optgroup>
-                    <optgroup label="Trend">
-                        <option value="3mo">3 Months</option><option value="6mo" selected>6 Months</option><option value="ytd">YTD</option>
-                    </optgroup>
-                    <optgroup label="Macro">
-                        <option value="1y">1 Year</option><option value="5y">5 Years</option>
-                    </optgroup>
-                </select>
-
-                <button onclick="fetchData()" id="btn" class="liquid-btn bg-blue-600/80 text-white px-10 py-3.5 rounded-full font-black text-xs uppercase tracking-widest shadow-lg">Execute</button>
-            </div>
-        </header>
-
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12">
-            <div class="lg:col-span-3 glass p-16 flex flex-col items-center justify-center text-center relative overflow-hidden group">
-                <span id="periodBadge" class="text-[9px] uppercase tracking-[0.8em] font-light mb-10 text-zinc-600 group-hover:text-blue-400 transition-colors">Aether Intelligence Stream</span>
-                <h2 id="adviceDisplay" class="text-[9rem] font-black tracking-tighter leading-none italic transition-all duration-1000 text-zinc-800">IDLE</h2>
-                <div id="priceDisplay" class="mt-10 text-xs font-mono tracking-[0.4em] text-zinc-500 uppercase">System Ready</div>
-            </div>
-
-            <div class="glass p-8 flex flex-col shadow-2xl hover:border-white/20 transition-all">
-                <h3 class="text-[10px] uppercase font-bold text-zinc-600 mb-6 tracking-widest border-b border-white/5 pb-2">Database Logs</h3>
-                <div id="signalHistory" class="space-y-5 text-[10px] font-mono tracking-wider">--</div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div class="glass p-8 flex justify-between items-center shadow-lg group">
-                <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-zinc-600 italic group-hover:text-zinc-400 transition-colors">Volatility</p>
-                <p id="volVal" class="text-2xl font-bold text-white">--</p>
-            </div>
-            <div class="glass p-8 flex justify-between items-center shadow-lg border-l-4 border-blue-500/40">
-                <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-zinc-600 italic">Target Prof</p>
-                <p id="tpVal" class="text-2xl font-bold text-blue-400 glow-blue">--</p>
-            </div>
-            <div class="glass p-8 flex justify-between items-center shadow-lg border-l-4 border-rose-500/40">
-                <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-zinc-600 italic">Stop Loss</p>
-                <p id="slVal" class="text-2xl font-bold text-rose-500 glow-red">--</p>
-            </div>
-        </div>
-
-        <div class="glass p-8 mb-12 shadow-2xl relative overflow-hidden group hover:border-white/20 transition-all duration-500">
-            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-600 opacity-50"></div>
-            
-            <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-                <h3 class="text-xs uppercase font-black text-white tracking-[0.2em]">Aether AI Synthesis</h3>
-                <span class="text-[9px] text-blue-400 font-mono border border-blue-500/30 px-2 py-1 rounded bg-blue-500/5 animate-pulse">LLM ENGINE IDLE</span>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="md:col-span-2">
-                    <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-3">Instant Analysis</p>
-                    <p id="aiSummary" class="text-sm text-zinc-300 leading-relaxed font-light italic">
-                        Awaiting system execution... Enter a ticker to generate real-time AI insights.
-                    </p>
+    <section class="h-screen w-full snap-start snap-always flex flex-col justify-center relative z-10 py-12">
+        <div class="max-w-6xl mx-auto w-full px-8 scale-95 origin-center">
+            <header class="flex flex-col lg:flex-row justify-between items-center mb-8 glass p-6 shadow-2xl">
+                <div class="text-center lg:text-left">
+                    <h1 class="text-2xl font-black text-white tracking-tighter italic uppercase">AlphaTrack <span class="text-blue-500 font-light italic">Feed</span></h1>
+                    <p class="text-[9px] text-zinc-500 font-mono tracking-[0.4em] uppercase mt-1">Gainesville Research • UI First MVP</p>
                 </div>
                 
-                <div class="space-y-6 border-l border-white/5 pl-8 hidden md:block">
-                    <div>
-                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-3">Risk Factors</p>
-                        <div id="aiRisks" class="flex flex-wrap gap-2">
-                            <span class="text-[10px] bg-zinc-900/50 text-zinc-500 px-2.5 py-1 rounded border border-white/5">System Standby</span>
-                        </div>
+                <div class="flex flex-wrap items-center gap-4 bg-white/5 p-2 rounded-full border border-white/5 shadow-inner mt-6 lg:mt-0">
+                    <input id="tickerInput" value="NVDA" class="bg-transparent border-none px-6 py-2 w-32 font-black text-blue-400 uppercase focus:outline-none text-xl placeholder-zinc-700">
+                    <div class="h-8 w-[1px] bg-white/10 hidden md:block"></div>
+                    <select id="periodInput" class="bg-zinc-900/40 rounded-full px-5 py-2 text-[10px] font-black border border-white/5 text-zinc-400 focus:outline-none">
+                        <option value="5d">5 Days</option><option value="1mo">1 Month</option><option value="3mo">3 Months</option><option value="6mo" selected>6 Months</option>
+                    </select>
+                    <button onclick="fetchData()" id="btn" class="liquid-btn bg-blue-600/80 text-white px-10 py-3.5 rounded-full font-black text-xs uppercase tracking-widest">Execute</button>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+                <div class="lg:col-span-3 glass p-10 flex flex-col items-center justify-center text-center relative overflow-hidden group h-[300px]">
+                    <span id="periodBadge" class="text-[9px] uppercase tracking-[0.8em] font-light mb-4 text-zinc-600">Swipe Down For Next</span>
+                    <h2 id="adviceDisplay" class="text-[7rem] font-black tracking-tighter leading-none italic transition-all duration-1000 text-zinc-800">IDLE</h2>
+                    <div id="priceDisplay" class="mt-4 text-xs font-mono tracking-[0.4em] text-zinc-500 uppercase">System Ready</div>
+                </div>
+
+                <div class="glass p-6 flex flex-col shadow-2xl h-[300px] overflow-hidden">
+                    <h3 class="text-[10px] uppercase font-bold text-zinc-600 mb-4 tracking-widest border-b border-white/5 pb-2">Metrics</h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center"><p class="text-[9px] uppercase text-zinc-600 font-bold">Vol</p><p id="volVal" class="text-lg font-bold text-white">--</p></div>
+                        <div class="flex justify-between items-center"><p class="text-[9px] uppercase text-zinc-600 font-bold">TP</p><p id="tpVal" class="text-lg font-bold text-blue-400 glow-blue">--</p></div>
+                        <div class="flex justify-between items-center"><p class="text-[9px] uppercase text-zinc-600 font-bold">SL</p><p id="slVal" class="text-lg font-bold text-rose-500 glow-red">--</p></div>
                     </div>
-                    <div>
-                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-2">Market Sentiment</p>
+                </div>
+            </div>
+
+            <div class="glass p-6 shadow-2xl relative overflow-hidden group">
+                <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-600 opacity-50"></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-2">
+                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-2">Instant Analysis</p>
+                        <p id="aiSummary" class="text-sm text-zinc-300 leading-relaxed font-light italic">Awaiting system execution...</p>
+                    </div>
+                    <div class="border-l border-white/5 pl-6 hidden md:block">
+                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-2">Sentiment</p>
                         <div class="flex items-center gap-3">
                             <div class="text-xl font-black text-white w-8" id="aiSentimentScore">--</div>
-                            <div class="w-full bg-zinc-900/50 h-1.5 rounded-full overflow-hidden border border-white/5">
-                                <div id="aiSentimentBar" class="bg-zinc-600 h-full w-0 transition-all duration-1000 ease-out"></div>
-                            </div>
+                            <div class="w-full bg-zinc-900/50 h-1.5 rounded-full overflow-hidden"><div id="aiSentimentBar" class="bg-zinc-600 h-full w-0"></div></div>
                         </div>
                     </div>
                 </div>
             </div>
+            
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-zinc-600 animate-bounce">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+            </div>
         </div>
+    </section>
 
-        <div class="glass p-10 h-[550px] mb-12 shadow-inner relative group">
-            <canvas id="myChart"></canvas>
+    <section class="h-screen w-full snap-start snap-always flex flex-col justify-center relative z-10 opacity-30 hover:opacity-100 transition-opacity duration-700">
+        <div class="max-w-6xl mx-auto w-full px-8 scale-95 flex flex-col items-center justify-center text-center">
+            <p class="text-[10px] text-blue-500 font-mono tracking-[0.8em] uppercase mb-8">Up Next in Feed</p>
+            <h2 class="text-[12rem] font-black tracking-tighter leading-none italic text-zinc-800">TSLA</h2>
+            <div class="glass p-10 mt-12 w-full max-w-3xl">
+                <p class="text-zinc-400 italic">This is Screen 2. Once we wire up the JavaScript array, this will auto-load TSLA data just like a TikTok swipe.</p>
+            </div>
         </div>
-        
-        <footer class="text-center text-zinc-800 text-[8px] tracking-[0.8em] font-light italic pb-10 uppercase">
-            AlphaTrack S-Tier Architecture • Created by Bruce Wang
-        </footer>
-    </div>
+    </section>
+
+    <section class="h-screen w-full snap-start snap-always flex flex-col justify-center relative z-10 opacity-30 hover:opacity-100 transition-opacity duration-700">
+        <div class="max-w-6xl mx-auto w-full px-8 scale-95 flex flex-col items-center justify-center text-center">
+            <h2 class="text-[12rem] font-black tracking-tighter leading-none italic text-zinc-800">PLTR</h2>
+        </div>
+    </section>
 
     <script>
         // --- ALPHA-SONIC ENGINE (Apple Signature Sound) ---
