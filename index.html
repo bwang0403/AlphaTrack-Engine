@@ -101,6 +101,42 @@
             </div>
         </div>
 
+        <div class="glass p-8 mb-12 shadow-2xl relative overflow-hidden group hover:border-white/20 transition-all duration-500">
+            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-600 opacity-50"></div>
+            
+            <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
+                <h3 class="text-xs uppercase font-black text-white tracking-[0.2em]">Aether AI Synthesis</h3>
+                <span class="text-[9px] text-blue-400 font-mono border border-blue-500/30 px-2 py-1 rounded bg-blue-500/5 animate-pulse">LLM ENGINE IDLE</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="md:col-span-2">
+                    <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-3">Instant Analysis</p>
+                    <p id="aiSummary" class="text-sm text-zinc-300 leading-relaxed font-light italic">
+                        Awaiting system execution... Enter a ticker to generate real-time AI insights.
+                    </p>
+                </div>
+                
+                <div class="space-y-6 border-l border-white/5 pl-8 hidden md:block">
+                    <div>
+                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-3">Risk Factors</p>
+                        <div id="aiRisks" class="flex flex-wrap gap-2">
+                            <span class="text-[10px] bg-zinc-900/50 text-zinc-500 px-2.5 py-1 rounded border border-white/5">System Standby</span>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-2">Market Sentiment</p>
+                        <div class="flex items-center gap-3">
+                            <div class="text-xl font-black text-white w-8" id="aiSentimentScore">--</div>
+                            <div class="w-full bg-zinc-900/50 h-1.5 rounded-full overflow-hidden border border-white/5">
+                                <div id="aiSentimentBar" class="bg-zinc-600 h-full w-0 transition-all duration-1000 ease-out"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="glass p-10 h-[550px] mb-12 shadow-inner relative group">
             <canvas id="myChart"></canvas>
         </div>
@@ -217,6 +253,56 @@
                     <span class="${item.advice.includes('BUY') ? 'text-blue-400' : 'text-rose-500'} font-bold">${item.advice}</span>
                 </div>
             `).join('');
+
+            // --- MOCK AI DATA INJECTION (To be replaced by real AWS API later) ---
+            const aiSummaryEl = document.getElementById('aiSummary');
+            const aiRisksEl = document.getElementById('aiRisks');
+            const aiSentScoreEl = document.getElementById('aiSentimentScore');
+            const aiSentBarEl = document.getElementById('aiSentimentBar');
+            
+            // Simulating a brief delay for the "AI generation" feel
+            aiSummaryEl.innerText = "Synthesizing market data...";
+            aiSummaryEl.className = "text-sm text-blue-400 animate-pulse leading-relaxed font-light italic";
+            
+            setTimeout(() => {
+                // Determine mock behavior based on current advice
+                const isBuy = current.advice.includes('BUY');
+                const isSell = current.advice.includes('SELL');
+                
+                if (isBuy) {
+                    aiSummaryEl.innerText = "Strong upward momentum detected. Institutional accumulation is evident across key support levels. The core business fundamentals remain highly resilient despite macro volatility.";
+                    aiRisksEl.innerHTML = `
+                        <span class="text-[10px] bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20">Overvaluation</span>
+                        <span class="text-[10px] bg-orange-500/10 text-orange-400 px-2.5 py-1 rounded border border-orange-500/20">Sector Rotation</span>
+                    `;
+                    aiSentScoreEl.innerText = "82";
+                    aiSentScoreEl.className = "text-xl font-black text-blue-400 w-8 glow-blue";
+                    aiSentBarEl.className = "bg-blue-500 h-full transition-all duration-1000 ease-out";
+                    aiSentBarEl.style.width = "82%";
+                } else if (isSell) {
+                    aiSummaryEl.innerText = "Significant bearish divergence observed. The asset has broken critical support zones, signaling potential distribution by major holders. Caution is strictly advised.";
+                    aiRisksEl.innerHTML = `
+                        <span class="text-[10px] bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20">Trend Reversal</span>
+                        <span class="text-[10px] bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20">Macro Headwinds</span>
+                    `;
+                    aiSentScoreEl.innerText = "24";
+                    aiSentScoreEl.className = "text-xl font-black text-rose-500 w-8 glow-red";
+                    aiSentBarEl.className = "bg-rose-500 h-full transition-all duration-1000 ease-out";
+                    aiSentBarEl.style.width = "24%";
+                } else {
+                    aiSummary'innerText = "Market remains in a consolidation phase. Insufficient directional volume to confirm a breakout or breakdown. Awaiting further catalysts.";
+                    aiRisksEl.innerHTML = `
+                        <span class="text-[10px] bg-zinc-500/10 text-zinc-400 px-2.5 py-1 rounded border border-zinc-500/20">Stagnation</span>
+                    `;
+                    aiSentScoreEl.innerText = "50";
+                    aiSentScoreEl.className = "text-xl font-black text-zinc-400 w-8";
+                    aiSentBarEl.className = "bg-zinc-500 h-full transition-all duration-1000 ease-out";
+                    aiSentBarEl.style.width = "50%";
+                }
+                
+                aiSummaryEl.classList.remove('animate-pulse', 'text-blue-400');
+                aiSummaryEl.classList.add('text-zinc-100');
+            }, 800);
         }
 
         function renderChart(ticker, body) {
