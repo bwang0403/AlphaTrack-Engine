@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AlphaTrack | Quantum Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #03050a; color: #f8fafc; overflow-x: hidden; }
+        .bk-blob { position: fixed; border-radius: 50%; filter: blur(150px); opacity: 0.1; z-index: -1; animation: drift 25s infinite alternate ease-in-out; }
+        .blob1 { background: #3b82f6; width: 60vw; height: 60vh; top: -10%; left: -10%; }
+        .blob2 { background: #8b5cf6; width: 50vw; height: 50vh; bottom: -10%; right: -10%; }
+        @keyframes drift { from { transform: translate(0,0); } to { transform: translate(10%, 10%); } }
+
+        .glass { background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); border-top: 1px solid rgba(255,255,255,0.1); border-radius: 1.5rem; }
+        
+        .ticker-wrap { width: 100%; overflow: hidden; background: rgba(0,0,0,0.9); border-bottom: 1px solid rgba(255,255,255,0.1); white-space: nowrap; box-sizing: border-box; backdrop-filter: blur(10px); }
+        .ticker-move { display: inline-block; padding-left: 100%; animation: ticker 120s linear infinite; }
+        @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
+        .live-tick { animation: tickPulse 1s infinite alternate; }
+        @keyframes tickPulse { from { opacity: 0.5; } to { opacity: 1; } }
+
+        #tradeModal { display: none; position: fixed; inset: 0; z-index: 200; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); }
+
+        .tab-btn { @apply px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all; }
+        .tab-active { @apply bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]; }
+        .tab-inactive { @apply bg-white/5 text-zinc-500 hover:bg-white/10; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .view-hidden { display: none !important; }
+    </style>
+</head>
+<body class="antialiased min-h-screen no-scrollbar flex flex-col">
+
+    <div class="bk-blob blob1"></div><div class="bk-blob blob2"></div>
+
+    <div class="ticker-wrap fixed top-0 left-0 z-[110] h-14 flex items-center shadow-lg">
+        <div id="tickerTape" class="ticker-move text-base font-mono font-bold text-zinc-300 tracking-widest uppercase flex gap-12">
+            INITIALIZING GLOBAL MACRO FEED...
+        </div>
+    </div>
+
+    <nav class="fixed top-14 left-0 w-full z-[100] p-5 px-8 flex justify-between items-center pointer-events-none">
+        <div class="flex gap-4 pointer-events-auto">
+            <div class="glass px-6 py-3 cursor-pointer border-blue-500/30 transition-all hover:bg-white/5" onclick="switchView('terminal')">
+                <h1 class="text-sm font-black italic text-white uppercase tracking-tighter">AlphaTrack</h1>
+            </div>
+            <button onclick="switchView('portfolio')" id="navHoldingsBtn" class="glass px-6 py-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white transition-all">Holdings</button>
+        </div>
+        <div class="flex gap-3 pointer-events-auto" id="searchBarContainer">
+             <input id="searchTicker" placeholder="TICKER..." class="glass bg-black/60 px-5 py-3 w-40 md:w-48 font-bold text-blue-400 uppercase focus:outline-none text-xs shadow-2xl">
+             <button onclick="handleSearch()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">EXECUTE</button>
+        </div>
+    </nav>
+
+    <main id="terminal-view" class="w-full flex-grow flex flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500"></main>
+
+    <main id="portfolio-view" class="view-hidden w-full flex-grow flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500">
+        <div class="flex justify-between items-end mb-8">
+            <div>
+                <h1 class="text-5xl font-black italic text-white uppercase tracking-tighter mb-2">Global Portfolio</h1>
+                <p class="text-sm text-zinc-500 font-mono tracking-widest uppercase">Aggregated Equity Curve</p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-zinc-500 font-bold uppercase tracking-widest mb-2">Total Account Value</p>
+                <div id="portTotalValue" class="text-6xl font-black text-white font-mono">$0.00</div>
+                <div id="portTotalPnl" class="text-lg font-black mt-2 font-mono text-zinc-500">--</div>
+            </div>
+        </div>
+        <div class="glass p-8 flex flex-col relative w-full min-h-[500px] mb-12">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex gap-3" id="portTabContainer"></div>
+                <span class="text-xs font-mono text-purple-400 uppercase tracking-widest border border-purple-500/30 px-3 py-1 rounded bg-purple-500/10 animate-pulse">Live Tracking</span>
+            </div>
+            <div class="flex-grow relative" id="portChartContainer"><canvas id="portfolioChart"></canvas></div>
+        </div>
+        <h3 class="text-2xl font-black italic text-white uppercase tracking-tighter mb-6">Individual Holdings</h3>
+        <div id="fullHoldingsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-20"></div>
+    </main>
+
+    <div id="tradeModal" onclick="this.style.display='none'"><div class="glass p-10 max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
+        <div class="text-center mb-8"><h3 id="modalTicker" class="text-4xl font-black italic text-blue-500">--</h3><p class="text-xs text-zinc-500 uppercase tracking-widest font-bold mt-2">Terminal Execution</p></div>
+        <div class="space-y-6">
+            <div class="flex justify-between border-b border-white/5 pb-4"><span class="text-xs text-zinc-400 uppercase">Spot</span><span id="modalPrice" class="text-2xl font-bold text-white">$0.00</span></div>
+            <div class="flex flex-col gap-2"><label class="text-xs text-zinc-500 uppercase font-bold tracking-widest">Shares</label><input id="tradeQuantity" type="number" value="10" class="bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-2xl font-bold text-white focus:outline-none focus:border-blue-500"></div>
+            <button onclick="confirmTrade()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">Submit Order</button>
+        </div>
+    </div></div>
+
+    <script>
+        const API_URL = "https://gfb5sx7teoffltjd54tntab7ea0kowjq.lambda-url.us-east-2.on.aws/";
+        const terminalContainer = document.getElementById('terminal-view');
+        const portfolioContainer = document.getElementById('portfolio-view');
+        
+        let currentChart = null, portChart = null;
+        let activeTicker = 'NVDA', activePeriod = '6mo', activePrice = 0, monteCarloData = null;
+        let portPeriod = '1mo'; 
+
+        window.onload = () => { loadFocusTicker('NVDA', '6mo'); };
+
+        function switchView(view) {
+            if (view === 'portfolio') {
+                terminalContainer.classList.add('view-hidden'); portfolioContainer.classList.remove('view-hidden');
+                document.getElementById('navHoldingsBtn').classList.replace('text-zinc-300', 'text-white');
+                document.getElementById('navHoldingsBtn').classList.replace('border-white/5', 'border-blue-500/50');
+                document.getElementById('searchBarContainer').style.opacity = '0.3'; document.getElementById('searchBarContainer').style.pointerEvents = 'none';
+                loadPortfolioData(portPeriod); 
+            } else {
+                portfolioContainer.classList.add('view-hidden'); terminalContainer.classList.remove('view-hidden');
+                document.getElementById('navHoldingsBtn').classList.replace('text-white', 'text-zinc-300');
+                document.getElementById('navHoldingsBtn').classList.replace('border-blue-500/50', 'border-white/5');
+                document.getElementById('searchBarContainer').style.opacity = '1'; document.getElementById('searchBarContainer').style.pointerEvents = 'auto';
+            }
+        }
+
+        function handleSearch() { const i = document.getElementById('searchTicker').value.toUpperCase().trim(); if(i){ activeTicker=i; loadFocusTicker(i, activePeriod); } document.getElementById('searchTicker').value=''; }
+
+        async function loadFocusTicker(ticker, period) {
+            activePeriod = period;
+            terminalContainer.innerHTML = `<div class="flex flex-col items-center justify-center h-[60vh] gap-8"><div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div><div class="text-blue-500 font-black text-sm uppercase tracking-[0.5em] animate-pulse">Establishing Quantum Link...</div></div>`;
+            try {
+                const res = await fetch(`${API_URL}?ticker=${ticker}&period=${period}`);
+                const data = await res.json();
+                let payload = data;
+                if (typeof data.body === 'string') payload = JSON.parse(data.body); else if (data.body) payload = data.body;
+                if (!payload.current) throw new Error("Data Integrity Failed");
+                activePrice = payload.current.price;
+                monteCarloData = payload.advanced?.monte_carlo || null;
+                renderTerminal(ticker, payload);
+            } catch(e) { terminalContainer.innerHTML = `<div class="flex items-center justify-center h-[60vh]"><div class="glass p-12 text-rose-500 font-black uppercase tracking-widest text-center text-lg">Connection Severed<br><span class="text-sm text-zinc-600 mt-4 block">${e.message}</span></div></div>`; }
+        }
+
+        function buildTape(items) { return items.map(i => `<span class="mx-16 text-blue-300 tracking-[0.2em]">• ${i}</span>`).join(''); }
+        function buildL2(bids, asks) { let html = '<div class="w-full flex gap-6 font-mono text-xs"><div class="flex-1 space-y-2">'; bids.forEach(b => html += `<div class="flex justify-between text-emerald-400 bg-emerald-500/5 px-3 py-1 rounded live-tick"><span>$${b.price.toFixed(2)}</span><span>${b.size}</span></div>`); html += '</div><div class="flex-1 space-y-2">'; asks.forEach(a => html += `<div class="flex justify-between text-rose-400 bg-rose-500/5 px-3 py-1 rounded live-tick"><span>$${a.price.toFixed(2)}</span><span>${a.size}</span></div>`); html += '</div></div>'; return html; }
+        function buildDarkPool(dp) { return dp.map(t => `<div class="flex justify-between items-center text-xs font-mono border-b border-white/5 py-2.5"><span class="text-zinc-500">${t.time}</span><span class="text-white text-sm">${t.shares}</span><span class="${t.type==='BUY'?'text-emerald-400':'text-rose-400'} font-bold text-sm">$${t.price}</span></div>`).join(''); }
+        function buildPeers(peers) { return peers.map(p => { const color = p.chg >= 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border-rose-500/30'; return `<div class="flex flex-col items-center justify-center p-4 rounded-xl border ${color}"><span class="text-sm font-black">${p.tkr}</span><span class="text-xs font-mono font-bold mt-1">${p.chg>0?'+':''}${p.chg}%</span></div>`; }).join(''); }
+        
+        function renderRedditStream(streamArray) {
+            if (!streamArray || streamArray.length === 0) return '';
+            return streamArray.map(c => {
+                const tagColor = c.tag === 'BULLISH' ? 'bg-emerald-500' : c.tag === 'BEARISH' ? 'bg-rose-500' : 'bg-zinc-500';
+                const textColor = c.upvotes >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                const arrow = c.upvotes >= 0 ? '▲' : '▼';
+                return `<div class="glass p-8 border-t border-white/5 group hover:bg-white/5 transition-all relative overflow-hidden"><div class="absolute top-0 left-0 w-1.5 h-full ${tagColor} opacity-40"></div><div class="flex justify-between items-start mb-6"><div class="flex flex-col"><span class="text-sm font-black text-blue-400 mb-1">u/${c.user}</span><span class="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">${c.tag}</span></div><div class="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-white/5"><span class="text-xs font-bold ${textColor}">${arrow} ${Math.abs(c.upvotes)}</span></div></div><p class="text-sm text-zinc-300 leading-relaxed italic font-light group-hover:text-white transition-colors">"${c.comment}"</p></div>`;
+            }).join('');
+        }
+
+        // 🚀 核心升级：带有真实外链、悬浮箭头、交互反馈的机构情报卡片
+        function renderProIntel(proArray) {
+            if (!proArray || proArray.length === 0) return '';
+            return proArray.map(item => `
+                <a href="${item.url || '#'}" target="_blank" class="block glass p-8 border-l-4 border-blue-500/50 group hover:bg-blue-900/20 hover:border-blue-400 transition-all relative overflow-hidden cursor-pointer shadow-lg hover:shadow-blue-500/20">
+                    <div class="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1 group-hover:-translate-y-1 duration-300">
+                        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mb-5">
+                        <span class="text-xs font-black text-blue-500 uppercase tracking-widest italic">${item.source}</span>
+                        <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                    </div>
+                    <h3 class="text-white font-black text-lg uppercase tracking-tight mb-4 group-hover:text-blue-300 transition-colors pr-8">${item.title}</h3>
+                    <p class="text-sm text-zinc-400 leading-relaxed italic font-light font-mono mb-6">"${item.summary}"</p>
+                    
+                    <div class="pt-4 border-t border-white/5">
+                        <span class="text-[10px] text-zinc-500 font-bold uppercase tracking-widest group-hover:text-blue-400 transition-colors">Read Original Article ↗</span>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function renderTerminal(ticker, payload) {
+            const ai = payload.ai_insight || {};
+            const cur = payload.current || {};
+            const adv = payload.advanced || {};
+            
+            if(adv.ticker_tape) document.getElementById('tickerTape').innerHTML = buildTape(adv.ticker_tape).repeat(4);
+            const low52 = cur.low_52w || cur.price * 0.8; const high52 = cur.high_52w || cur.price * 1.2;
+            const rangeProgress = Math.max(0, Math.min(100, ((cur.price - low52) / (high52 - low52)) * 100)).toFixed(1);
+
+            terminalContainer.innerHTML = `
+                <div class="w-full flex flex-col lg:flex-row gap-6 mb-8">
+                    <div class="w-full lg:w-3/12 flex flex-col gap-6">
+                        <div class="glass p-8 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[280px]">
+                            <span class="absolute text-[10rem] font-black text-white/[0.02] italic uppercase select-none pointer-events-none">${ticker}</span>
+                            <span class="relative z-10 text-4xl font-black italic tracking-tighter text-blue-500 uppercase mb-4">${ticker}</span>
+                            <h2 class="relative z-10 text-5xl font-black tracking-tighter italic uppercase ${cur.advice?.includes('BUY') ? 'text-blue-400' : cur.advice?.includes('SELL') ? 'text-rose-500' : 'text-zinc-500'}">${cur.advice || 'N/A'}</h2>
+                            <button onclick="openTradeModal()" class="relative z-10 w-full mt-8 bg-white/5 border border-white/10 hover:bg-blue-600 text-white py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">Execute Paper Trade</button>
+                        </div>
+                        <div class="glass p-8 flex flex-col">
+                            <span class="text-xs text-zinc-500 font-bold uppercase tracking-[0.2em] mb-6">52W Gravity Range</span>
+                            <div class="flex justify-between items-end mb-4 px-1">
+                                <div class="flex flex-col"><span class="text-sm font-bold text-rose-400 font-mono">$${low52}</span></div>
+                                <div class="flex flex-col items-center"><span class="text-3xl font-black text-white drop-shadow-md">$${cur.price}</span></div>
+                                <div class="flex flex-col items-end"><span class="text-sm font-bold text-emerald-400 font-mono">$${high52}</span></div>
+                            </div>
+                            <div class="relative w-full h-1.5 bg-black rounded-full border border-white/5">
+                                <div class="absolute h-full bg-gradient-to-r from-blue-600 via-purple-500 to-pink-500 opacity-90 rounded-full" style="width: ${rangeProgress}%"></div>
+                                <div class="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full border-2 border-purple-500 shadow-[0_0_12px_rgba(255,255,255,0.9)]" style="left: calc(${rangeProgress}% - 8px)"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full lg:w-6/12 glass p-8 flex flex-col relative min-h-[600px]">
+                        <div class="flex justify-between items-center mb-6">
+                            <div class="flex gap-3">${['5d', '1mo', '6mo', '1y'].map(p => `<button onclick="loadFocusTicker('${ticker}', '${p}')" class="tab-btn ${activePeriod === p ? 'tab-active' : 'tab-inactive'}">${p}</button>`).join('')}</div>
+                            <span class="text-xs font-mono text-blue-400 uppercase tracking-widest border border-blue-500/30 px-3 py-1 rounded bg-blue-500/10 animate-pulse">Quantum Engine Active</span>
+                        </div>
+                        <div class="flex-grow relative"><canvas id="mainTerminalChart"></canvas></div>
+                    </div>
+                    <div class="w-full lg:w-3/12 flex flex-col gap-6">
+                        <div class="glass p-6 border-l-4 border-blue-500/50"><p class="text-xs text-blue-400 font-black uppercase mb-2 tracking-widest">📊 Tech Pulse</p><p class="text-sm text-zinc-300 leading-relaxed">${ai.technicals || '...'}</p></div>
+                        <div class="glass p-6 border-l-4 border-purple-500/50"><p class="text-xs text-purple-400 font-black uppercase mb-2 tracking-widest">🔥 Narrative</p><p class="text-sm text-zinc-300 leading-relaxed">${ai.narrative || '...'}</p></div>
+                        <div class="glass p-6 border-l-4 border-emerald-500/50"><p class="text-xs text-emerald-400 font-black uppercase mb-2 tracking-widest">🐋 Whales</p><p class="text-sm text-zinc-300 leading-relaxed">${ai.whales || '...'}</p></div>
+                        <div class="glass p-6 bg-gradient-to-br from-blue-900/30 to-black border border-blue-500/30">
+                            <div class="flex justify-between items-start mb-4">
+                                <span class="text-xs text-blue-400 font-black uppercase tracking-[0.2em]">Next Catalyst</span>
+                                <span class="text-[10px] text-rose-400 font-mono bg-rose-500/10 px-2 py-1 rounded border border-rose-500/30">IMP MOVE: ${adv.catalyst?.implied_move}</span>
+                            </div>
+                            <p class="text-lg font-black text-white italic mb-2">${adv.catalyst?.event}</p>
+                            <p class="text-4xl font-mono font-black text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)]">T-${adv.catalyst?.days_left} <span class="text-sm text-zinc-500 font-sans tracking-widest">DAYS</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+                    <div class="glass p-8 flex flex-col"><p class="text-xs text-zinc-500 font-bold uppercase tracking-[0.2em] mb-5 flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>L2 Order Book</p>${buildL2(adv.order_book?.bids || [], adv.order_book?.asks || [])}</div>
+                    <div class="glass p-8 flex flex-col"><p class="text-xs text-zinc-500 font-bold uppercase tracking-[0.2em] mb-5 flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>Dark Pool Block</p><div class="flex flex-col">${buildDarkPool(adv.dark_pool || [])}</div></div>
+                    <div class="glass p-8 flex flex-col"><p class="text-xs text-zinc-500 font-bold uppercase tracking-[0.2em] mb-5">Sector Heatmap</p><div class="grid grid-cols-2 gap-3">${buildPeers(adv.peers || [])}</div></div>
+                    <div class="glass p-8 flex flex-col"><p class="text-xs text-zinc-500 font-bold uppercase tracking-[0.2em] mb-5">Insider Radar</p><div class="flex flex-col space-y-3">${(adv.insider || []).map(i => `<div class="flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div class="flex flex-col"><span class="text-xs font-bold text-white mb-1">${i.role}</span><span class="text-[10px] text-zinc-500">${i.date}</span></div><div class="flex flex-col items-end"><span class="text-[10px] font-black tracking-widest ${i.type==='BUY'?'text-emerald-400':'text-rose-400'} mb-1">${i.type}</span><span class="text-xs font-mono text-zinc-300">${i.shares} shrs</span></div></div>`).join('')}</div></div>
+                </div>
+
+                <div class="w-full mb-16">
+                    <div class="flex items-center gap-4 mb-8 px-2">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2zM14 4v4h4" stroke-width="2"/></svg></div>
+                        <h2 class="text-xl font-black uppercase tracking-[0.4em] text-white">Institutional Intelligence</h2>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-2">
+                        ${renderProIntel(ai.pro_intel)}
+                    </div>
+                </div>
+
+                <div class="w-full pb-32">
+                    <div class="flex items-center gap-4 mb-8 px-2">
+                        <div class="w-10 h-10 rounded-full bg-[#FF4500] flex items-center justify-center shadow-lg shadow-orange-500/20"><svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.056 1.597.04.21.06.42.06.645 0 2.334-2.829 4.225-6.32 4.225-3.491 0-6.32-1.891-6.32-4.225 0-.22.02-.435.06-.645a1.752 1.752 0 0 1-1.056-1.597c0-.968.786-1.754 1.754-1.754.463 0 .875.18 1.179.465 1.186-.846 2.842-1.411 4.67-1.489l.886-4.143a.25.25 0 0 1 .155-.175l2.712-.571c.117-.319.425-.548.787-.548z"/></svg></div>
+                        <h2 class="text-xl font-black uppercase tracking-[0.4em] text-white">Community Pulse & Flow</h2>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
+                        ${renderRedditStream(ai.reddit_stream)}
+                    </div>
+                </div>
+            `;
+            renderMainChartWithCone(payload.history || []);
+        }
+
+        function renderMainChartWithCone(history) {
+            const ctx = document.getElementById('mainTerminalChart').getContext('2d');
+            if (currentChart) currentChart.destroy();
+            const quantumPlugin = { 
+                id: 'quantum', 
+                afterDraw: (chart) => { 
+                    const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
+                    if (chart.tooltip?._active?.length) { 
+                        const activeX = chart.tooltip._active[0].element.x; 
+                        ctx.save(); ctx.beginPath(); ctx.moveTo(activeX, top); ctx.lineTo(activeX, bottom); 
+                        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)'; ctx.setLineDash([5, 5]); 
+                        ctx.stroke(); ctx.restore(); 
+                    }
+                    if (monteCarloData && history.length > 0) {
+                        const lastPoint = chart.getDatasetMeta(0).data[history.length - 1];
+                        if(!lastPoint) return;
+                        const startX = lastPoint.x, startY = lastPoint.y, endX = right;
+                        const upperY = y.getPixelForValue(monteCarloData.upper); const lowerY = y.getPixelForValue(monteCarloData.lower);
+                        ctx.save(); ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, upperY); ctx.lineTo(endX, lowerY); ctx.closePath();
+                        const gradient = ctx.createLinearGradient(startX, 0, endX, 0);
+                        gradient.addColorStop(0, 'rgba(59, 130, 246, 0)'); gradient.addColorStop(1, 'rgba(59, 130, 246, 0.15)');
+                        ctx.fillStyle = gradient; ctx.fill();
+                        ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, upperY); ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)'; ctx.setLineDash([3, 3]); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, lowerY); ctx.stroke();
+                        ctx.fillStyle = 'rgba(59, 130, 246, 0.8)'; ctx.font = 'bold 11px monospace'; ctx.fillText('AI PROJ', endX - 45, (upperY + lowerY)/2); ctx.restore();
+                    }
+                } 
+            };
+            currentChart = new Chart(ctx, { 
+                type: 'line', plugins: [quantumPlugin], 
+                data: { labels: history.map(d => d.x), datasets: [{ data: history.map(d => d.y), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0, tension: 0.2, fill: true, backgroundColor: (c) => { const g = c.chart.ctx.createLinearGradient(0, 0, 0, 600); g.addColorStop(0, 'rgba(59, 130, 246, 0.15)'); g.addColorStop(1, 'rgba(59, 130, 246, 0)'); return g; } }] }, 
+                options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, layout: { padding: { right: 50 } }, plugins: { legend: { display: false }, tooltip: { enabled: true, titleFont: {size: 14}, bodyFont: {size: 14}, padding: 12, backgroundColor: 'rgba(3, 5, 10, 0.95)', callbacks: { title: (i) => i[0].label, label: (i) => ` $${i.parsed.y}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 12 } } } } } 
+            });
+        }
+
+        // ==========================================
+        // 模块 2：🚀 全局持仓 (FULL PAGE PORTFOLIO)
+        // ==========================================
+        async function loadPortfolioData(period) {
+            portPeriod = period;
+            const pStr = localStorage.getItem('alphaPortfolio');
+            const portContainer = document.getElementById('portChartContainer');
+            
+            document.getElementById('portTabContainer').innerHTML = ['5d', '1mo', '3mo', '6mo'].map(p => `<button onclick="loadPortfolioData('${p}')" class="tab-btn ${portPeriod === p ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.5)]' : 'tab-inactive'}">${p}</button>`).join('');
+
+            if (!pStr || JSON.parse(pStr).length === 0) {
+                document.getElementById('portTotalValue').innerText = "$0.00";
+                document.getElementById('portTotalPnl').innerText = "Buy stocks in terminal to begin.";
+                document.getElementById('portTotalPnl').className = "text-lg font-black mt-2 font-mono text-zinc-500";
+                document.getElementById('fullHoldingsGrid').innerHTML = '<div class="col-span-full text-center text-zinc-600 italic mt-10 text-lg">No positions detected in Quantum Matrix.</div>';
+                if(portChart) portChart.destroy();
+                return;
+            }
+
+            portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center"><div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div><canvas id="portfolioChart" class="opacity-0"></canvas>`;
+
+            try {
+                const res = await fetch(`${API_URL}?portfolio=${encodeURIComponent(pStr)}&period=${period}`);
+                const data = await res.json();
+                let payload = data;
+                if (typeof data.body === 'string') payload = JSON.parse(data.body); else if (data.body) payload = data.body;
+
+                const history = payload.history || [];
+                const currentVal = payload.current_value || 0;
+                const prices = payload.current_prices || {};
+                
+                const p = JSON.parse(pStr);
+                let totalCost = 0;
+                p.forEach(item => { totalCost += (item.price * item.quantity); });
+                const totalPnl = currentVal - totalCost;
+
+                document.getElementById('portTotalValue').innerText = `$${currentVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                const pnlEl = document.getElementById('portTotalPnl');
+                pnlEl.innerText = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${((totalPnl/totalCost)*100).toFixed(2)}%)`;
+                pnlEl.className = `text-2xl font-black mt-2 font-mono ${totalPnl >= 0 ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]'}`;
+
+                portContainer.innerHTML = '<canvas id="portfolioChart"></canvas>';
+                const ctx = document.getElementById('portfolioChart').getContext('2d');
+                if (portChart) portChart.destroy();
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, 500);
+                gradient.addColorStop(0, 'rgba(168, 85, 247, 0.2)');
+                gradient.addColorStop(1, 'rgba(168, 85, 247, 0)');
+
+                portChart = new Chart(ctx, { 
+                    type: 'line', 
+                    data: { labels: history.map(d => d.x), datasets: [{ data: history.map(d => d.y), borderColor: '#a855f7', borderWidth: 3, pointRadius: 0, tension: 0.3, fill: true, backgroundColor: gradient }] }, 
+                    options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false }, tooltip: { enabled: true, titleFont: {size: 14}, bodyFont: {size: 16}, padding: 12, backgroundColor: 'rgba(3, 5, 10, 0.95)', callbacks: { title: (i) => i[0].label, label: (i) => ` Total: $${i.parsed.y.toLocaleString()}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 14 } } } } } 
+                });
+
+                document.getElementById('fullHoldingsGrid').innerHTML = p.map((item, i) => {
+                    const currentSpot = prices[item.ticker] || item.price;
+                    const pnl = (currentSpot - item.price) * item.quantity;
+                    return `
+                        <div class="glass p-8 border border-white/5 relative group hover:border-purple-500/50 transition-all flex flex-col justify-between">
+                            <div class="flex justify-between items-start mb-6">
+                                <div><span class="text-3xl font-black italic text-white">${item.ticker}</span> <span class="text-sm text-zinc-500 ml-2 block mt-1">${item.quantity} Shares</span></div>
+                                <button onclick="sellHolding(${i})" class="text-xs font-black bg-rose-500/10 text-rose-500 px-4 py-2 rounded border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all uppercase">Liquidate</button>
+                            </div>
+                            <div class="flex justify-between items-end border-t border-white/10 pt-4">
+                                <div><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">Entry</p><p class="text-lg font-bold font-mono text-zinc-300">$${item.price}</p></div>
+                                <div class="text-right"><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">P&L</p><p class="text-xl font-black ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'} font-mono">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</p></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Failed to construct equity curve</div>`; }
+        }
+
+        // ==========================================
+        // 模块 3：交易逻辑
+        // ==========================================
+        function openTradeModal() { document.getElementById('modalTicker').innerText = activeTicker; document.getElementById('modalPrice').innerText = `$${activePrice}`; document.getElementById('tradeModal').style.display = 'flex'; }
+        
+        function confirmTrade() { 
+            const q = parseFloat(document.getElementById('tradeQuantity').value); 
+            const t = { ticker: activeTicker, price: activePrice, quantity: q, date: new Date().toLocaleDateString() }; 
+            const p = JSON.parse(localStorage.getItem('alphaPortfolio') || '[]'); 
+            p.push(t); localStorage.setItem('alphaPortfolio', JSON.stringify(p)); 
+            document.getElementById('tradeModal').style.display = 'none'; 
+            switchView('portfolio'); 
+        }
+
+        function sellHolding(i) { 
+            const p = JSON.parse(localStorage.getItem('alphaPortfolio') || '[]'); 
+            p.splice(i, 1); 
+            localStorage.setItem('alphaPortfolio', JSON.stringify(p)); 
+            loadPortfolioData(portPeriod); 
+        }
+    </script>
+</body>
+</html>
