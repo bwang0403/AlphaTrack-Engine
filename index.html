@@ -2,303 +2,125 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AlphaTrack | Liquid Aether Signature</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlphaTrack | Next-Gen Intelligence Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #03050a; overflow-x: hidden; color: #f8fafc; }
+        body { font-family: 'Inter', sans-serif; background-color: #03050a; color: #f8fafc; overflow-x: hidden; }
         
-        /* AETHER BACKGROUND */
-        .bk-blob { position: fixed; border-radius: 50%; filter: blur(150px); opacity: 0.15; z-index: -1; animation: drift 25s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95); }
-        .blob1 { background: #ff1e56; width: 65vw; height: 65vh; top: -15vh; left: -10vw; }
-        .blob2 { background: #0070f3; width: 55vw; height: 55vh; bottom: -15vh; right: -10vw; animation-delay: -5s; }
-        .blob3 { background: #0070f3; width: 45vw; height: 45vh; top: 35vh; right: 15vw; animation-delay: -10s; }
-        .blob4 { background: #ff1e56; width: 35vw; height: 35vh; bottom: 25vh; left: 25vw; animation-delay: -15s; }
-        @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(8vw, 8vh) scale(1.1); } }
+        /* AETHER BACKGROUND ANIMATION */
+        .bk-blob { position: fixed; border-radius: 50%; filter: blur(150px); opacity: 0.15; z-index: -1; animation: drift 20s infinite alternate ease-in-out; }
+        .blob1 { background: #3b82f6; width: 50vw; height: 50vh; top: -10%; left: -10%; }
+        .blob2 { background: #8b5cf6; width: 40vw; height: 40vh; bottom: -10%; right: -10%; }
+        .blob3 { background: #ff1e56; width: 30vw; height: 30vh; bottom: 20%; left: 20%; opacity: 0.1; }
+        @keyframes drift { from { transform: translate(0,0) scale(1); } to { transform: translate(10%, 10%) scale(1.1); } }
 
-        /* SOFT GLASS ELEMENTS */
+        /* GLASSMORPHISM */
         .glass { 
-            background: rgba(255, 255, 255, 0.03); 
-            backdrop-filter: blur(40px); 
-            border: 1px solid rgba(255, 255, 255, 0.08); 
-            border-radius: 2.5rem; 
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+            backdrop-filter: blur(40px); border: 1px solid rgba(255,255,255,0.05);
+            border-top: 1px solid rgba(255,255,255,0.15); border-radius: 2rem;
         }
 
-        /* SOFT BUTTON & INPUTS */
-        .liquid-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .liquid-btn:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
-        .liquid-btn:active { transform: scale(0.92); background: rgba(255, 255, 255, 0.02); }
+        .reveal { animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        .delay-1 { animation-delay: 0.2s; }
+        .delay-2 { animation-delay: 0.4s; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 
-        .glow-blue { text-shadow: 0 0 20px rgba(0, 112, 243, 0.4); }
-        .glow-red { text-shadow: 0 0 20px rgba(255, 30, 86, 0.4); }
+        .text-glow { text-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
     </style>
 </head>
-<body class="antialiased h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth">
+<body class="antialiased min-h-screen flex flex-col selection:bg-blue-500/30">
 
-    <div class="bk-blob blob1"></div><div class="bk-blob blob2"></div>
-    <div class="bk-blob blob3"></div><div class="bk-blob blob4"></div>
+    <div class="bk-blob blob1"></div><div class="bk-blob blob2"></div><div class="bk-blob blob3"></div>
 
-    <section class="h-screen w-full snap-start snap-always flex flex-col justify-center relative z-10 py-12">
-        <div class="max-w-6xl mx-auto w-full px-8 scale-95 origin-center">
-            <header class="flex flex-col lg:flex-row justify-between items-center mb-8 glass p-6 shadow-2xl">
-                <div class="text-center lg:text-left">
-                    <h1 class="text-2xl font-black text-white tracking-tighter italic uppercase">AlphaTrack <span class="text-blue-500 font-light italic">Feed</span></h1>
-                    <p class="text-[9px] text-zinc-500 font-mono tracking-[0.4em] uppercase mt-1">Gainesville Research • UI First MVP</p>
-                </div>
-                
-                <div class="flex flex-wrap items-center gap-4 bg-white/5 p-2 rounded-full border border-white/5 shadow-inner mt-6 lg:mt-0">
-                    <input id="tickerInput" value="NVDA" class="bg-transparent border-none px-6 py-2 w-32 font-black text-blue-400 uppercase focus:outline-none text-xl placeholder-zinc-700">
-                    <div class="h-8 w-[1px] bg-white/10 hidden md:block"></div>
-                    <select id="periodInput" class="bg-zinc-900/40 rounded-full px-5 py-2 text-[10px] font-black border border-white/5 text-zinc-400 focus:outline-none">
-                        <option value="5d">5 Days</option><option value="1mo">1 Month</option><option value="3mo">3 Months</option><option value="6mo" selected>6 Months</option>
-                    </select>
-                    <button onclick="fetchData()" id="btn" class="liquid-btn bg-blue-600/80 text-white px-10 py-3.5 rounded-full font-black text-xs uppercase tracking-widest">Execute</button>
-                </div>
-            </header>
-
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-                <div class="lg:col-span-3 glass p-10 flex flex-col items-center justify-center text-center relative overflow-hidden group h-[300px]">
-                    <span id="periodBadge" class="text-[9px] uppercase tracking-[0.8em] font-light mb-4 text-zinc-600">Swipe Down For Next</span>
-                    <h2 id="adviceDisplay" class="text-[7rem] font-black tracking-tighter leading-none italic transition-all duration-1000 text-zinc-800">IDLE</h2>
-                    <div id="priceDisplay" class="mt-4 text-xs font-mono tracking-[0.4em] text-zinc-500 uppercase">System Ready</div>
-                </div>
-
-                <div class="glass p-6 flex flex-col shadow-2xl h-[300px] overflow-hidden">
-                    <h3 class="text-[10px] uppercase font-bold text-zinc-600 mb-4 tracking-widest border-b border-white/5 pb-2">Metrics</h3>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center"><p class="text-[9px] uppercase text-zinc-600 font-bold">Vol</p><p id="volVal" class="text-lg font-bold text-white">--</p></div>
-                        <div class="flex justify-between items-center"><p class="text-[9px] uppercase text-zinc-600 font-bold">TP</p><p id="tpVal" class="text-lg font-bold text-blue-400 glow-blue">--</p></div>
-                        <div class="flex justify-between items-center"><p class="text-[9px] uppercase text-zinc-600 font-bold">SL</p><p id="slVal" class="text-lg font-bold text-rose-500 glow-red">--</p></div>
-                    </div>
-                </div>
+    <nav class="w-full p-6 flex justify-between items-center z-50 absolute top-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-[0_0_20px_rgba(37,99,235,0.5)]">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             </div>
+            <h1 class="text-lg font-black italic text-white uppercase tracking-tighter">Alpha<span class="text-blue-500 font-light">Track</span></h1>
+        </div>
+        <div>
+            <a href="app.html" class="glass px-8 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                Launch Terminal
+            </a>
+        </div>
+    </nav>
 
-            <div class="glass p-6 shadow-2xl relative overflow-hidden group">
-                <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-600 opacity-50"></div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="md:col-span-2">
-                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-2">Instant Analysis</p>
-                        <p id="aiSummary" class="text-sm text-zinc-300 leading-relaxed font-light italic">Awaiting system execution...</p>
-                    </div>
-                    <div class="border-l border-white/5 pl-6 hidden md:block">
-                        <p class="text-[9px] uppercase text-zinc-500 font-bold tracking-[0.3em] mb-2">Sentiment</p>
-                        <div class="flex items-center gap-3">
-                            <div class="text-xl font-black text-white w-8" id="aiSentimentScore">--</div>
-                            <div class="w-full bg-zinc-900/50 h-1.5 rounded-full overflow-hidden"><div id="aiSentimentBar" class="bg-zinc-600 h-full w-0"></div></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <main class="flex-grow flex flex-col items-center justify-center text-center px-4 pt-32 pb-20 z-10 relative">
+        <div class="glass px-4 py-1.5 rounded-full mb-8 reveal">
+            <span class="text-[10px] font-mono text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                System v2.8 Online
+            </span>
+        </div>
+        
+        <h1 class="text-6xl md:text-8xl font-black italic uppercase tracking-tighter leading-none mb-6 reveal delay-1 text-white">
+            Navigate the <br>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 text-glow">Chaos.</span>
+        </h1>
+        
+        <p class="max-w-2xl text-sm md:text-base text-zinc-400 leading-relaxed font-light mb-12 reveal delay-2">
+            AlphaTrack is a next-generation intelligence terminal. We synthesize AI-driven technicals, institutional flow, and retail community sentiment into a single, actionable matrix. Stop guessing. Start executing.
+        </p>
+
+        <a href="app.html" class="group relative inline-flex items-center justify-center px-10 py-5 font-black text-white uppercase tracking-[0.2em] text-sm bg-blue-600 rounded-2xl overflow-hidden reveal delay-2 shadow-[0_0_40px_rgba(37,99,235,0.4)] hover:shadow-[0_0_60px_rgba(37,99,235,0.6)] transition-all hover:scale-105 active:scale-95">
+            <span class="absolute w-0 h-0 transition-all duration-500 ease-out bg-white rounded-full group-hover:w-56 group-hover:h-56 opacity-10"></span>
+            <span class="relative flex items-center gap-3">
+                Enter Command Center
+                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </span>
+        </a>
+    </main>
+
+    <section class="max-w-7xl mx-auto w-full px-6 pb-32 z-10">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
             
-            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-zinc-600 animate-bounce">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+            <div class="glass p-10 md:col-span-8 group hover:border-white/20 transition-all reveal delay-1 relative overflow-hidden">
+                <div class="absolute -right-20 -top-20 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all"></div>
+                <h3 class="text-2xl font-black italic uppercase text-white mb-3 tracking-tight">Trinity Intelligence System</h3>
+                <p class="text-xs text-zinc-400 font-light leading-relaxed max-w-md mb-8">
+                    Don't rely on a single data point. Our proprietary engine fuses Wall Street institutional analysis, AI-driven technical momentum, and real-time Reddit (r/WallStreetBets) community pulse into a unified strategic directive.
+                </p>
+                <div class="flex gap-4">
+                    <span class="px-3 py-1 bg-white/5 border border-white/10 rounded text-[9px] uppercase font-bold text-blue-400 tracking-widest">AI Matrix</span>
+                    <span class="px-3 py-1 bg-white/5 border border-white/10 rounded text-[9px] uppercase font-bold text-purple-400 tracking-widest">WSJ/Bloomberg</span>
+                    <span class="px-3 py-1 bg-white/5 border border-white/10 rounded text-[9px] uppercase font-bold text-orange-500 tracking-widest">Reddit Pulse</span>
+                </div>
             </div>
+
+            <div class="glass p-10 md:col-span-4 group hover:border-blue-500/30 transition-all reveal delay-2">
+                <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-6 border border-blue-500/20 text-blue-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <h3 class="text-xl font-black italic uppercase text-white mb-2 tracking-tight">Paper Trading</h3>
+                <p class="text-xs text-zinc-400 font-light leading-relaxed">
+                    Test your thesis risk-free. Execute simulated trades directly from the terminal, track your global P&L in real-time, and manage your virtual portfolio without risking real capital.
+                </p>
+            </div>
+
+            <div class="glass p-10 md:col-span-12 group hover:border-white/20 transition-all reveal delay-2 flex flex-col md:flex-row justify-between items-center gap-8">
+                <div class="max-w-xl">
+                    <h3 class="text-2xl font-black italic uppercase text-white mb-3 tracking-tight">52-Week Gravity Radar</h3>
+                    <p class="text-xs text-zinc-400 font-light leading-relaxed">
+                        Visualize market extremes instantly. Our neural stream engine tracks support/resistance algorithms and maps the current spot price against its annual highs and lows, translating technical jargon into plain-English "Range Intelligence".
+                    </p>
+                </div>
+                <div class="w-full md:w-1/3 h-2 bg-white/5 rounded-full relative overflow-hidden">
+                    <div class="absolute top-0 left-0 h-full w-[75%] bg-gradient-to-r from-blue-600 to-emerald-400"></div>
+                </div>
+            </div>
+
         </div>
     </section>
 
-    <section class="h-screen w-full snap-start snap-always flex flex-col justify-center relative z-10 opacity-30 hover:opacity-100 transition-opacity duration-700">
-        <div class="max-w-6xl mx-auto w-full px-8 scale-95 flex flex-col items-center justify-center text-center">
-            <p class="text-[10px] text-blue-500 font-mono tracking-[0.8em] uppercase mb-8">Up Next in Feed</p>
-            <h2 class="text-[12rem] font-black tracking-tighter leading-none italic text-zinc-800">TSLA</h2>
-            <div class="glass p-10 mt-12 w-full max-w-3xl">
-                <p class="text-zinc-400 italic">This is Screen 2. Once we wire up the JavaScript array, this will auto-load TSLA data just like a TikTok swipe.</p>
-            </div>
-        </div>
-    </section>
+    <footer class="w-full p-8 border-t border-white/5 text-center z-10 mt-auto">
+        <p class="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
+            Developed by AlphaTrack Systems © 2026 | Powered by Neural Aether
+        </p>
+    </footer>
 
-    <section class="h-screen w-full snap-start snap-always flex flex-col justify-center relative z-10 opacity-30 hover:opacity-100 transition-opacity duration-700">
-        <div class="max-w-6xl mx-auto w-full px-8 scale-95 flex flex-col items-center justify-center text-center">
-            <h2 class="text-[12rem] font-black tracking-tighter leading-none italic text-zinc-800">PLTR</h2>
-        </div>
-    </section>
-
-    <script>
-        // --- ALPHA-SONIC ENGINE (Apple Signature Sound) ---
-        const AudioEngine = {
-            ctx: null,
-            init() {
-                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                if (this.ctx.state === 'suspended') this.ctx.resume();
-            },
-            playClick() {
-                this.init();
-                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
-                osc.type = 'sine'; osc.frequency.setValueAtTime(160, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
-                osc.connect(gain); gain.connect(this.ctx.destination);
-                osc.start(); osc.stop(this.ctx.currentTime + 0.1);
-            },
-            playBuy() {
-                const now = this.ctx.currentTime;
-                [523.25, 659.25, 783.99].forEach((f, i) => {
-                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
-                    osc.type = 'sine'; osc.frequency.setValueAtTime(f, now + i * 0.08);
-                    gain.gain.setValueAtTime(0, now + i * 0.08);
-                    gain.gain.linearRampToValueAtTime(0.05, now + i * 0.08 + 0.02);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.4);
-                    osc.connect(gain); gain.connect(this.ctx.destination);
-                    osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.5);
-                });
-            },
-            playSell() {
-                const now = this.ctx.currentTime;
-                [392.00, 329.63, 261.63].forEach((f, i) => {
-                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
-                    osc.type = i === 2 ? 'triangle' : 'sine';
-                    osc.frequency.setValueAtTime(f, now + i * 0.12);
-                    gain.gain.setValueAtTime(0, now + i * 0.12);
-                    gain.gain.linearRampToValueAtTime(0.06, now + i * 0.12 + 0.04);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.6);
-                    osc.connect(gain); gain.connect(this.ctx.destination);
-                    osc.start(now + i * 0.12); osc.stop(now + i * 0.12 + 0.7);
-                });
-            },
-            playSignal(type) {
-                this.init();
-                if (type.includes('BUY')) this.playBuy();
-                else if (type.includes('SELL')) this.playSell();
-                else {
-                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
-                    osc.frequency.setValueAtTime(440, this.ctx.currentTime);
-                    gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
-                    osc.connect(gain); gain.connect(this.ctx.destination);
-                    osc.start(); osc.stop(this.ctx.currentTime + 0.5);
-                }
-            }
-        };
-
-        const API_URL = "https://gfb5sx7teoffltjd54tntab7ea0kowjq.lambda-url.us-east-2.on.aws/";
-        let chart;
-
-        async function fetchData() {
-            AudioEngine.playClick();
-            const ticker = document.getElementById('tickerInput').value.toUpperCase();
-            const period = document.getElementById('periodInput').value;
-            const btn = document.getElementById('btn');
-            btn.innerText = "EXECUTING"; btn.disabled = true;
-
-            try {
-                const response = await fetch(`${API_URL}?ticker=${ticker}&period=${period}`);
-                const body = await response.json();
-                const data = typeof body.body === "string" ? JSON.parse(body.body) : body;
-                
-                setTimeout(() => {
-                    AudioEngine.playSignal(data.current.advice);
-                    updateUI(data);
-                    renderChart(ticker, data);
-                }, 200);
-            } catch (err) { alert("CLOUD LINK BROKEN"); } 
-            finally { btn.innerText = "Execute"; btn.disabled = false; }
-        }
-
-        function updateUI(body) {
-            const { current, history_signals, ticker, period } = body;
-            const adviceCard = document.getElementById('adviceDisplay');
-            adviceCard.innerText = current.advice;
-            
-            if (current.advice.includes('BUY')) {
-                adviceCard.className = "text-[9rem] font-black tracking-tighter italic text-blue-400 transition-all duration-1000 glow-blue";
-            } else if (current.advice.includes('SELL')) {
-                adviceCard.className = "text-[9rem] font-black tracking-tighter italic text-rose-500 transition-all duration-1000 glow-red";
-            } else {
-                adviceCard.className = "text-[9rem] font-black tracking-tighter italic text-zinc-700 transition-all duration-1000";
-            }
-
-            document.getElementById('periodBadge').innerText = `${ticker} • ${period} LIVE FEED`;
-            document.getElementById('priceDisplay').innerText = `${ticker} VALUE: $${current.price}`;
-            document.getElementById('volVal').innerText = `${current.vol}%`;
-            document.getElementById('tpVal').innerText = `$${current.tp}`;
-            document.getElementById('slVal').innerText = `$${current.sl}`;
-
-            document.getElementById('signalHistory').innerHTML = history_signals.map(item => `
-                <div class="flex justify-between py-2 border-b border-white/5 opacity-60 hover:opacity-100 transition-opacity">
-                    <span class="text-zinc-500">${item.timestamp.split('T')[0].slice(5)}</span>
-                    <span class="${item.advice.includes('BUY') ? 'text-blue-400' : 'text-rose-500'} font-bold">${item.advice}</span>
-                </div>
-            `).join('');
-
-            // --- MOCK AI DATA INJECTION (To be replaced by real AWS API later) ---
-            const aiSummaryEl = document.getElementById('aiSummary');
-            const aiRisksEl = document.getElementById('aiRisks');
-            const aiSentScoreEl = document.getElementById('aiSentimentScore');
-            const aiSentBarEl = document.getElementById('aiSentimentBar');
-            
-            // Simulating a brief delay for the "AI generation" feel
-            aiSummaryEl.innerText = "Synthesizing market data...";
-            aiSummaryEl.className = "text-sm text-blue-400 animate-pulse leading-relaxed font-light italic";
-            
-            setTimeout(() => {
-                // Determine mock behavior based on current advice
-                const isBuy = current.advice.includes('BUY');
-                const isSell = current.advice.includes('SELL');
-                
-                if (isBuy) {
-                    aiSummaryEl.innerText = "Strong upward momentum detected. Institutional accumulation is evident across key support levels. The core business fundamentals remain highly resilient despite macro volatility.";
-                    aiRisksEl.innerHTML = `
-                        <span class="text-[10px] bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20">Overvaluation</span>
-                        <span class="text-[10px] bg-orange-500/10 text-orange-400 px-2.5 py-1 rounded border border-orange-500/20">Sector Rotation</span>
-                    `;
-                    aiSentScoreEl.innerText = "82";
-                    aiSentScoreEl.className = "text-xl font-black text-blue-400 w-8 glow-blue";
-                    aiSentBarEl.className = "bg-blue-500 h-full transition-all duration-1000 ease-out";
-                    aiSentBarEl.style.width = "82%";
-                } else if (isSell) {
-                    aiSummaryEl.innerText = "Significant bearish divergence observed. The asset has broken critical support zones, signaling potential distribution by major holders. Caution is strictly advised.";
-                    aiRisksEl.innerHTML = `
-                        <span class="text-[10px] bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20">Trend Reversal</span>
-                        <span class="text-[10px] bg-rose-500/10 text-rose-400 px-2.5 py-1 rounded border border-rose-500/20">Macro Headwinds</span>
-                    `;
-                    aiSentScoreEl.innerText = "24";
-                    aiSentScoreEl.className = "text-xl font-black text-rose-500 w-8 glow-red";
-                    aiSentBarEl.className = "bg-rose-500 h-full transition-all duration-1000 ease-out";
-                    aiSentBarEl.style.width = "24%";
-                } else {
-                    aiSummaryEl.innerText = "Market remains in a consolidation phase. Insufficient directional volume to confirm a breakout or breakdown. Awaiting further catalysts.";
-                    aiRisksEl.innerHTML = `
-                        <span class="text-[10px] bg-zinc-500/10 text-zinc-400 px-2.5 py-1 rounded border border-zinc-500/20">Stagnation</span>
-                    `;
-                    aiSentScoreEl.innerText = "50";
-                    aiSentScoreEl.className = "text-xl font-black text-zinc-400 w-8";
-                    aiSentBarEl.className = "bg-zinc-500 h-full transition-all duration-1000 ease-out";
-                    aiSentBarEl.style.width = "50%";
-                }
-                
-                aiSummaryEl.classList.remove('animate-pulse', 'text-blue-400');
-                aiSummaryEl.classList.add('text-zinc-100');
-            }, 800);
-        }
-
-        function renderChart(ticker, body) {
-            const ctx = document.getElementById('myChart').getContext('2d');
-            if (chart) chart.destroy();
-            chart = new Chart(ctx, {
-                data: {
-                    datasets: [
-                        { type: 'line', data: body.history, borderColor: 'rgba(255, 255, 255, 0.4)', borderWidth: 1, pointRadius: 0, fill: true, backgroundColor: 'rgba(255, 255, 255, 0.01)', tension: 0.4 },
-                        { type: 'scatter', data: body.data.supports.map(s => ({x: s.date, y: s.price})), backgroundColor: '#0070f3', pointRadius: 4 },
-                        { type: 'scatter', data: body.data.resistances.map(r => ({x: r.date, y: r.price})), backgroundColor: '#ff1e56', pointRadius: 4 }
-                    ]
-                },
-                options: { 
-                    responsive: true, maintainAspectRatio: false, 
-                    scales: { 
-                        x: { display: false }, 
-                        y: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#475569', font: { family: 'monospace' } } } 
-                    }, 
-                    plugins: { legend: { display: false } } 
-                }
-            });
-        }
-    </script>
 </body>
 </html>
