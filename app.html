@@ -28,6 +28,9 @@
         .tab-inactive { @apply bg-white/5 text-zinc-500 hover:bg-white/10; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .view-hidden { display: none !important; }
+
+        /* 新增：首页搜索框发光特效 */
+        .search-glow:focus-within { box-shadow: 0 0 40px rgba(59, 130, 246, 0.3); border-color: rgba(59, 130, 246, 0.5); }
     </style>
 </head>
 <body class="antialiased min-h-screen no-scrollbar flex flex-col">
@@ -42,18 +45,75 @@
 
     <nav class="fixed top-14 left-0 w-full z-[100] p-5 px-8 flex justify-between items-center pointer-events-none">
         <div class="flex gap-4 pointer-events-auto">
-            <div class="glass px-6 py-3 cursor-pointer border-blue-500/30 transition-all hover:bg-white/5" onclick="switchView('terminal')">
+            <div class="glass px-6 py-3 cursor-pointer border-blue-500/30 transition-all hover:bg-white/5" onclick="switchView('home')">
                 <h1 class="text-sm font-black italic text-white uppercase tracking-tighter">AlphaTrack</h1>
             </div>
             <button onclick="switchView('portfolio')" id="navHoldingsBtn" class="glass px-6 py-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white transition-all">Holdings</button>
         </div>
-        <div class="flex gap-3 pointer-events-auto" id="searchBarContainer">
-             <input id="searchTicker" placeholder="TICKER..." class="glass bg-black/60 px-5 py-3 w-40 md:w-48 font-bold text-blue-400 uppercase focus:outline-none text-xs shadow-2xl">
+        <div class="flex gap-3 pointer-events-auto transition-opacity duration-300" id="searchBarContainer">
+             <input id="searchTicker" placeholder="TICKER..." class="glass bg-black/60 px-5 py-3 w-40 md:w-48 font-bold text-blue-400 uppercase focus:outline-none text-xs shadow-2xl" onkeypress="if(event.key==='Enter') handleSearch()">
              <button onclick="handleSearch()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">EXECUTE</button>
         </div>
     </nav>
 
-    <main id="terminal-view" class="w-full flex-grow flex flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500"></main>
+    <main id="home-view" class="w-full flex-grow flex flex-col items-center justify-start pt-40 px-6 max-w-[1200px] mx-auto transition-all duration-500 pb-20">
+        
+        <div class="text-center mb-12">
+            <h1 class="text-5xl md:text-6xl font-black italic text-white uppercase tracking-tighter mb-4 drop-shadow-lg">Intelligence <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Nexus</span></h1>
+            <p class="text-sm text-zinc-400 font-mono tracking-widest uppercase">Enter ticker to launch quantum analysis</p>
+        </div>
+
+        <div class="w-full max-w-2xl relative mb-20">
+            <div class="absolute inset-0 bg-blue-500/10 blur-xl rounded-full"></div>
+            <div class="relative glass bg-black/40 flex items-center p-2 rounded-2xl search-glow transition-all border-white/10">
+                <svg class="w-6 h-6 text-blue-500 ml-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input id="bigSearchTicker" type="text" placeholder="e.g. PLTR, ASTS, VRT..." class="w-full bg-transparent border-none text-2xl font-black text-white uppercase placeholder-zinc-600 focus:outline-none px-4 py-4" onkeypress="if(event.key==='Enter') executeHomeSearch()">
+                <button onclick="executeHomeSearch()" class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">Scan</button>
+            </div>
+        </div>
+
+        <div class="w-full max-w-5xl">
+            <div class="flex items-center gap-3 mb-8">
+                <span class="w-3 h-3 rounded-full bg-rose-500 animate-pulse shadow-[0_0_10px_rgba(244,63,94,0.8)]"></span>
+                <h2 class="text-lg font-black uppercase tracking-[0.3em] text-white">AI Breakout Radar</h2>
+                <div class="flex-grow h-px bg-gradient-to-r from-white/10 to-transparent ml-4"></div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <script>
+                    const recommendations = [
+                        { t: 'VRT', n: 'Vertiv Holdings', c: '+12.4%', r: "Cooling infrastructure demand surging due to next-gen high-TDP AI data centers." },
+                        { t: 'ASTS', n: 'AST SpaceMobile', c: '+28.1%', r: "Recent successful satellite deployment and telecom partnerships driving massive volume." },
+                        { t: 'PLTR', n: 'Palantir Tech', c: '+8.7%', r: "AIP bootcamps converting to massive enterprise contracts; consistent GAAP profitability." },
+                        { t: 'VKTX', n: 'Viking Therapeutics', c: '+34.2%', r: "Breakthrough oral GLP-1 trial results challenging incumbent weight-loss drugs." },
+                        { t: 'SOUN', n: 'SoundHound AI', c: '+19.5%', r: "Automotive and restaurant voice AI integrations leading to explosive revenue guidance." },
+                        { t: 'CELH', n: 'Celsius Holdings', c: '+11.3%', r: "Expanding international footprint and shifting consumer beverage trends driving growth." },
+                        { t: 'SYM', n: 'Symbotic Inc', c: '+15.8%', r: "Warehouse automation deals expanding rapidly with major retail and logistics chains." },
+                        { t: 'MSTR', n: 'MicroStrategy', c: '+22.0%', r: "Aggressive Bitcoin treasury accumulation acts as a highly leveraged crypto proxy." },
+                        { t: 'CEG', n: 'Constellation Energy', c: '+9.1%', r: "Nuclear energy demand spiking as tech giants secure power for massive AI server farms." },
+                        { t: 'ARM', n: 'Arm Holdings', c: '+11.2%', r: "Adoption of v9 architecture driving higher royalty rates across edge AI devices." }
+                    ];
+
+                    document.write(recommendations.map(stock => `
+                        <div onclick="executeHomeSearch('${stock.t}')" class="glass p-5 flex flex-col gap-3 cursor-pointer hover:bg-white/5 hover:border-blue-500/40 transition-all group relative overflow-hidden">
+                            <div class="absolute right-0 top-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-all"></div>
+                            <div class="flex justify-between items-center z-10">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xl font-black italic text-white">${stock.t}</span>
+                                    <span class="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">${stock.n}</span>
+                                </div>
+                                <span class="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">${stock.c}</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-light z-10 group-hover:text-zinc-300 transition-colors">
+                                <span class="text-blue-500 font-bold">AI SIGNAL:</span> ${stock.r}
+                            </p>
+                        </div>
+                    `).join(''));
+                </script>
+            </div>
+        </div>
+    </main>
+    <main id="terminal-view" class="view-hidden w-full flex-grow flex flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500"></main>
 
     <main id="portfolio-view" class="view-hidden w-full flex-grow flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500">
         <div class="flex justify-between items-end mb-8">
@@ -89,6 +149,7 @@
 
     <script>
         const API_URL = "https://gfb5sx7teoffltjd54tntab7ea0kowjq.lambda-url.us-east-2.on.aws/";
+        const homeContainer = document.getElementById('home-view');
         const terminalContainer = document.getElementById('terminal-view');
         const portfolioContainer = document.getElementById('portfolio-view');
         
@@ -96,24 +157,60 @@
         let activeTicker = 'NVDA', activePeriod = '6mo', activePrice = 0, monteCarloData = null;
         let portPeriod = '1mo'; 
 
-        window.onload = () => { loadFocusTicker('NVDA', '6mo'); };
-
-        function switchView(view) {
-            if (view === 'portfolio') {
-                terminalContainer.classList.add('view-hidden'); portfolioContainer.classList.remove('view-hidden');
-                document.getElementById('navHoldingsBtn').classList.replace('text-zinc-300', 'text-white');
-                document.getElementById('navHoldingsBtn').classList.replace('border-white/5', 'border-blue-500/50');
-                document.getElementById('searchBarContainer').style.opacity = '0.3'; document.getElementById('searchBarContainer').style.pointerEvents = 'none';
-                loadPortfolioData(portPeriod); 
+        // 🚀 修改：页面加载逻辑
+        window.onload = () => { 
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('view') === 'portfolio') {
+                switchView('portfolio');
             } else {
-                portfolioContainer.classList.add('view-hidden'); terminalContainer.classList.remove('view-hidden');
+                // 默认加载进入搜索大厅
+                switchView('home'); 
+            }
+        };
+
+        // 🚀 修改：视图切换逻辑 (增加对 home-view 和 searchBar 的控制)
+        function switchView(view) {
+            const searchBar = document.getElementById('searchBarContainer');
+            homeContainer.classList.add('view-hidden');
+            terminalContainer.classList.add('view-hidden');
+            portfolioContainer.classList.add('view-hidden');
+
+            if (view === 'home') {
+                homeContainer.classList.remove('view-hidden');
+                searchBar.style.opacity = '0';
+                searchBar.style.pointerEvents = 'none';
                 document.getElementById('navHoldingsBtn').classList.replace('text-white', 'text-zinc-300');
                 document.getElementById('navHoldingsBtn').classList.replace('border-blue-500/50', 'border-white/5');
-                document.getElementById('searchBarContainer').style.opacity = '1'; document.getElementById('searchBarContainer').style.pointerEvents = 'auto';
+            } 
+            else if (view === 'portfolio') {
+                portfolioContainer.classList.remove('view-hidden');
+                searchBar.style.opacity = '0';
+                searchBar.style.pointerEvents = 'none';
+                document.getElementById('navHoldingsBtn').classList.replace('text-zinc-300', 'text-white');
+                document.getElementById('navHoldingsBtn').classList.replace('border-white/5', 'border-blue-500/50');
+                loadPortfolioData(portPeriod); 
+            } 
+            else if (view === 'terminal') {
+                terminalContainer.classList.remove('view-hidden');
+                searchBar.style.opacity = '1';
+                searchBar.style.pointerEvents = 'auto';
+                document.getElementById('navHoldingsBtn').classList.replace('text-white', 'text-zinc-300');
+                document.getElementById('navHoldingsBtn').classList.replace('border-blue-500/50', 'border-white/5');
             }
         }
 
-        function handleSearch() { const i = document.getElementById('searchTicker').value.toUpperCase().trim(); if(i){ activeTicker=i; loadFocusTicker(i, activePeriod); } document.getElementById('searchTicker').value=''; }
+        // 🚀 新增：处理主页巨大搜索框的执行逻辑
+        function executeHomeSearch(presetTicker = null) {
+            const val = presetTicker || document.getElementById('bigSearchTicker').value.toUpperCase().trim();
+            if(val) {
+                activeTicker = val;
+                switchView('terminal');
+                loadFocusTicker(val, activePeriod);
+            }
+            document.getElementById('bigSearchTicker').value = '';
+        }
+
+        function handleSearch() { const i = document.getElementById('searchTicker').value.toUpperCase().trim(); if(i){ activeTicker=i; switchView('terminal'); loadFocusTicker(i, activePeriod); } document.getElementById('searchTicker').value=''; }
 
         async function loadFocusTicker(ticker, period) {
             activePeriod = period;
@@ -283,9 +380,6 @@
             });
         }
 
-        // ==========================================
-        // 模块 2：🚀 全局持仓 (AWS CLOUD INTEGRATION)
-        // ==========================================
         async function loadPortfolioData(period) {
             portPeriod = period;
             const portContainer = document.getElementById('portChartContainer');
@@ -295,7 +389,6 @@
             portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center"><div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div><canvas id="portfolioChart" class="opacity-0"></canvas>`;
 
             try {
-                // 📡 发送请求给 AWS Lambda 拉取 DynamoDB 数据
                 const res = await fetch(`${API_URL}?action=get_portfolio&period=${period}`);
                 const data = await res.json();
                 let payload = data;
@@ -303,7 +396,7 @@
 
                 const history = payload.history || [];
                 const currentVal = payload.current_value || 0;
-                const p = payload.positions || []; // 从云端获取的持仓数组
+                const p = payload.positions || [];
                 const prices = payload.current_prices || {};
 
                 if (p.length === 0) {
@@ -338,7 +431,6 @@
                     options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false }, tooltip: { enabled: true, titleFont: {size: 14}, bodyFont: {size: 16}, padding: 12, backgroundColor: 'rgba(3, 5, 10, 0.95)', callbacks: { title: (i) => i[0].label, label: (i) => ` Total: $${i.parsed.y.toLocaleString()}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 14 } } } } } 
                 });
 
-                // 渲染单独持仓卡片 (保持 UI 100% 相同)
                 document.getElementById('fullHoldingsGrid').innerHTML = p.map((item) => {
                     const currentSpot = prices[item.ticker] || parseFloat(item.entry_price);
                     const pnl = (currentSpot - parseFloat(item.entry_price)) * parseFloat(item.quantity);
@@ -359,9 +451,6 @@
             } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Cloud Sync Failed</div>`; console.error(e); }
         }
 
-        // ==========================================
-        // 模块 3：交易逻辑 (AWS CLOUD INTEGRATION)
-        // ==========================================
         function openTradeModal() { document.getElementById('modalTicker').innerText = activeTicker; document.getElementById('modalPrice').innerText = `$${activePrice}`; document.getElementById('tradeModal').style.display = 'flex'; }
         
         async function confirmTrade() { 
@@ -370,7 +459,6 @@
             btn.innerText = "Syncing to Cloud...";
             
             try {
-                // 📡 写入 AWS DynamoDB
                 await fetch(`${API_URL}?action=add_trade&ticker=${activeTicker}&price=${activePrice}&quantity=${q}`);
                 document.getElementById('tradeModal').style.display = 'none'; 
                 switchView('portfolio'); 
@@ -384,7 +472,6 @@
 
         async function sellHolding(ticker) { 
             try {
-                // 📡 从 AWS DynamoDB 删除
                 await fetch(`${API_URL}?action=liquidate&ticker=${ticker}`);
                 loadPortfolioData(portPeriod); 
             } catch(e) {
