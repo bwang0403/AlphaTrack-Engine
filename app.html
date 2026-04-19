@@ -70,7 +70,7 @@
         <div class="glass p-8 flex flex-col relative w-full min-h-[500px] mb-12">
             <div class="flex justify-between items-center mb-6">
                 <div class="flex gap-3" id="portTabContainer"></div>
-                <span class="text-xs font-mono text-purple-400 uppercase tracking-widest border border-purple-500/30 px-3 py-1 rounded bg-purple-500/10 animate-pulse">Live Tracking</span>
+                <span class="text-xs font-mono text-purple-400 uppercase tracking-widest border border-purple-500/30 px-3 py-1 rounded bg-purple-500/10 animate-pulse">Live Cloud Sync</span>
             </div>
             <div class="flex-grow relative" id="portChartContainer"><canvas id="portfolioChart"></canvas></div>
         </div>
@@ -83,7 +83,7 @@
         <div class="space-y-6">
             <div class="flex justify-between border-b border-white/5 pb-4"><span class="text-xs text-zinc-400 uppercase">Spot</span><span id="modalPrice" class="text-2xl font-bold text-white">$0.00</span></div>
             <div class="flex flex-col gap-2"><label class="text-xs text-zinc-500 uppercase font-bold tracking-widest">Shares</label><input id="tradeQuantity" type="number" value="10" class="bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-2xl font-bold text-white focus:outline-none focus:border-blue-500"></div>
-            <button onclick="confirmTrade()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">Submit Order</button>
+            <button onclick="confirmTrade()" id="tradeSubmitBtn" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">Submit Order to Cloud</button>
         </div>
     </div></div>
 
@@ -145,7 +145,6 @@
             }).join('');
         }
 
-        // 🚀 核心升级：带有真实外链、悬浮箭头、交互反馈的机构情报卡片
         function renderProIntel(proArray) {
             if (!proArray || proArray.length === 0) return '';
             return proArray.map(item => `
@@ -153,14 +152,12 @@
                     <div class="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1 group-hover:-translate-y-1 duration-300">
                         <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                     </div>
-                    
                     <div class="flex justify-between items-center mb-5">
                         <span class="text-xs font-black text-blue-500 uppercase tracking-widest italic">${item.source}</span>
                         <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
                     </div>
                     <h3 class="text-white font-black text-lg uppercase tracking-tight mb-4 group-hover:text-blue-300 transition-colors pr-8">${item.title}</h3>
                     <p class="text-sm text-zinc-400 leading-relaxed italic font-light font-mono mb-6">"${item.summary}"</p>
-                    
                     <div class="pt-4 border-t border-white/5">
                         <span class="text-[10px] text-zinc-500 font-bold uppercase tracking-widest group-hover:text-blue-400 transition-colors">Read Original Article ↗</span>
                     </div>
@@ -287,39 +284,39 @@
         }
 
         // ==========================================
-        // 模块 2：🚀 全局持仓 (FULL PAGE PORTFOLIO)
+        // 模块 2：🚀 全局持仓 (AWS CLOUD INTEGRATION)
         // ==========================================
         async function loadPortfolioData(period) {
             portPeriod = period;
-            const pStr = localStorage.getItem('alphaPortfolio');
             const portContainer = document.getElementById('portChartContainer');
             
             document.getElementById('portTabContainer').innerHTML = ['5d', '1mo', '3mo', '6mo'].map(p => `<button onclick="loadPortfolioData('${p}')" class="tab-btn ${portPeriod === p ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.5)]' : 'tab-inactive'}">${p}</button>`).join('');
 
-            if (!pStr || JSON.parse(pStr).length === 0) {
-                document.getElementById('portTotalValue').innerText = "$0.00";
-                document.getElementById('portTotalPnl').innerText = "Buy stocks in terminal to begin.";
-                document.getElementById('portTotalPnl').className = "text-lg font-black mt-2 font-mono text-zinc-500";
-                document.getElementById('fullHoldingsGrid').innerHTML = '<div class="col-span-full text-center text-zinc-600 italic mt-10 text-lg">No positions detected in Quantum Matrix.</div>';
-                if(portChart) portChart.destroy();
-                return;
-            }
-
             portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center"><div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div><canvas id="portfolioChart" class="opacity-0"></canvas>`;
 
             try {
-                const res = await fetch(`${API_URL}?portfolio=${encodeURIComponent(pStr)}&period=${period}`);
+                // 📡 发送请求给 AWS Lambda 拉取 DynamoDB 数据
+                const res = await fetch(`${API_URL}?action=get_portfolio&period=${period}`);
                 const data = await res.json();
                 let payload = data;
                 if (typeof data.body === 'string') payload = JSON.parse(data.body); else if (data.body) payload = data.body;
 
                 const history = payload.history || [];
                 const currentVal = payload.current_value || 0;
+                const p = payload.positions || []; // 从云端获取的持仓数组
                 const prices = payload.current_prices || {};
-                
-                const p = JSON.parse(pStr);
+
+                if (p.length === 0) {
+                    document.getElementById('portTotalValue').innerText = "$0.00";
+                    document.getElementById('portTotalPnl').innerText = "Buy stocks in terminal to begin.";
+                    document.getElementById('portTotalPnl').className = "text-lg font-black mt-2 font-mono text-zinc-500";
+                    document.getElementById('fullHoldingsGrid').innerHTML = '<div class="col-span-full text-center text-zinc-600 italic mt-10 text-lg">No positions detected in AWS Cloud Matrix.</div>';
+                    if(portChart) portChart.destroy();
+                    return;
+                }
+
                 let totalCost = 0;
-                p.forEach(item => { totalCost += (item.price * item.quantity); });
+                p.forEach(item => { totalCost += (parseFloat(item.entry_price) * parseFloat(item.quantity)); });
                 const totalPnl = currentVal - totalCost;
 
                 document.getElementById('portTotalValue').innerText = `$${currentVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -341,45 +338,59 @@
                     options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false }, tooltip: { enabled: true, titleFont: {size: 14}, bodyFont: {size: 16}, padding: 12, backgroundColor: 'rgba(3, 5, 10, 0.95)', callbacks: { title: (i) => i[0].label, label: (i) => ` Total: $${i.parsed.y.toLocaleString()}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 14 } } } } } 
                 });
 
-                document.getElementById('fullHoldingsGrid').innerHTML = p.map((item, i) => {
-                    const currentSpot = prices[item.ticker] || item.price;
-                    const pnl = (currentSpot - item.price) * item.quantity;
+                // 渲染单独持仓卡片 (保持 UI 100% 相同)
+                document.getElementById('fullHoldingsGrid').innerHTML = p.map((item) => {
+                    const currentSpot = prices[item.ticker] || parseFloat(item.entry_price);
+                    const pnl = (currentSpot - parseFloat(item.entry_price)) * parseFloat(item.quantity);
                     return `
                         <div class="glass p-8 border border-white/5 relative group hover:border-purple-500/50 transition-all flex flex-col justify-between">
                             <div class="flex justify-between items-start mb-6">
-                                <div><span class="text-3xl font-black italic text-white">${item.ticker}</span> <span class="text-sm text-zinc-500 ml-2 block mt-1">${item.quantity} Shares</span></div>
-                                <button onclick="sellHolding(${i})" class="text-xs font-black bg-rose-500/10 text-rose-500 px-4 py-2 rounded border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all uppercase">Liquidate</button>
+                                <div><span class="text-3xl font-black italic text-white">${item.ticker}</span> <span class="text-sm text-zinc-500 ml-2 block mt-1">${item.quantity} Shares <span class="text-[9px] text-blue-400 border border-blue-400/30 px-1 ml-1 rounded">CLOUD</span></span></div>
+                                <button onclick="sellHolding('${item.ticker}')" class="text-xs font-black bg-rose-500/10 text-rose-500 px-4 py-2 rounded border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all uppercase">Liquidate</button>
                             </div>
                             <div class="flex justify-between items-end border-t border-white/10 pt-4">
-                                <div><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">Entry</p><p class="text-lg font-bold font-mono text-zinc-300">$${item.price}</p></div>
+                                <div><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">Entry</p><p class="text-lg font-bold font-mono text-zinc-300">$${parseFloat(item.entry_price).toFixed(2)}</p></div>
                                 <div class="text-right"><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">P&L</p><p class="text-xl font-black ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'} font-mono">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</p></div>
                             </div>
                         </div>
                     `;
                 }).join('');
 
-            } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Failed to construct equity curve</div>`; }
+            } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Cloud Sync Failed</div>`; console.error(e); }
         }
 
         // ==========================================
-        // 模块 3：交易逻辑
+        // 模块 3：交易逻辑 (AWS CLOUD INTEGRATION)
         // ==========================================
         function openTradeModal() { document.getElementById('modalTicker').innerText = activeTicker; document.getElementById('modalPrice').innerText = `$${activePrice}`; document.getElementById('tradeModal').style.display = 'flex'; }
         
-        function confirmTrade() { 
+        async function confirmTrade() { 
             const q = parseFloat(document.getElementById('tradeQuantity').value); 
-            const t = { ticker: activeTicker, price: activePrice, quantity: q, date: new Date().toLocaleDateString() }; 
-            const p = JSON.parse(localStorage.getItem('alphaPortfolio') || '[]'); 
-            p.push(t); localStorage.setItem('alphaPortfolio', JSON.stringify(p)); 
-            document.getElementById('tradeModal').style.display = 'none'; 
-            switchView('portfolio'); 
+            const btn = document.getElementById('tradeSubmitBtn');
+            btn.innerText = "Syncing to Cloud...";
+            
+            try {
+                // 📡 写入 AWS DynamoDB
+                await fetch(`${API_URL}?action=add_trade&ticker=${activeTicker}&price=${activePrice}&quantity=${q}`);
+                document.getElementById('tradeModal').style.display = 'none'; 
+                switchView('portfolio'); 
+            } catch(e) {
+                console.error("Cloud Error", e);
+                alert("Failed to sync trade to AWS.");
+            } finally {
+                btn.innerText = "Submit Order to Cloud";
+            }
         }
 
-        function sellHolding(i) { 
-            const p = JSON.parse(localStorage.getItem('alphaPortfolio') || '[]'); 
-            p.splice(i, 1); 
-            localStorage.setItem('alphaPortfolio', JSON.stringify(p)); 
-            loadPortfolioData(portPeriod); 
+        async function sellHolding(ticker) { 
+            try {
+                // 📡 从 AWS DynamoDB 删除
+                await fetch(`${API_URL}?action=liquidate&ticker=${ticker}`);
+                loadPortfolioData(portPeriod); 
+            } catch(e) {
+                console.error("Cloud Error", e);
+                alert("Failed to liquidate position in AWS.");
+            }
         }
     </script>
 </body>
