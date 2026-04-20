@@ -29,7 +29,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .view-hidden { display: none !important; }
 
-        /* 新增：首页搜索框发光特效 */
         .search-glow:focus-within { box-shadow: 0 0 40px rgba(59, 130, 246, 0.3); border-color: rgba(59, 130, 246, 0.5); }
     </style>
 </head>
@@ -163,6 +162,14 @@
 
     <script>
         const API_URL = "https://gfb5sx7teoffltjd54tntab7ea0kowjq.lambda-url.us-east-2.on.aws/";
+        
+        // 🚀 核心：初始化设备指纹 (Parallel Universe Isolation)
+        let currentUserSession = localStorage.getItem('alpha_user_id');
+        if (!currentUserSession) {
+            currentUserSession = 'user_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('alpha_user_id', currentUserSession);
+        }
+
         const homeContainer = document.getElementById('home-view');
         const terminalContainer = document.getElementById('terminal-view');
         const portfolioContainer = document.getElementById('portfolio-view');
@@ -172,7 +179,6 @@
         let portPeriod = '1mo'; 
         let globalAvailableCash = 100000.0; 
 
-        // 🚀 新增：全局追踪当前的交易行为是买还是卖
         let currentTradeAction = 'BUY'; 
         let currentMaxSellQty = 0;
 
@@ -231,7 +237,8 @@
             activePeriod = period;
             terminalContainer.innerHTML = `<div class="flex flex-col items-center justify-center h-[60vh] gap-8"><div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div><div class="text-blue-500 font-black text-sm uppercase tracking-[0.5em] animate-pulse">Establishing Quantum Link...</div></div>`;
             try {
-                const res = await fetch(`${API_URL}?ticker=${ticker}&period=${period}`);
+                // 🚀 发送 API 请求时带上身份证
+                const res = await fetch(`${API_URL}?ticker=${ticker}&period=${period}&user_id=${currentUserSession}`);
                 const data = await res.json();
                 let payload = data;
                 if (typeof data.body === 'string') payload = JSON.parse(data.body); else if (data.body) payload = data.body;
@@ -286,7 +293,6 @@
             const low52 = cur.low_52w || cur.price * 0.8; const high52 = cur.high_52w || cur.price * 1.2;
             const rangeProgress = Math.max(0, Math.min(100, ((cur.price - low52) / (high52 - low52)) * 100)).toFixed(1);
 
-            // 🚀 修改：点击买入按钮调用 openTradeModal('BUY')
             terminalContainer.innerHTML = `
                 <div class="w-full flex flex-col lg:flex-row gap-6 mb-8">
                     <div class="w-full lg:w-3/12 flex flex-col gap-6">
@@ -405,7 +411,8 @@
             portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center"><div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div><canvas id="portfolioChart" class="opacity-0"></canvas>`;
 
             try {
-                const res = await fetch(`${API_URL}?action=get_portfolio&period=${period}`);
+                // 🚀 发送请求时带上身份 ID
+                const res = await fetch(`${API_URL}?action=get_portfolio&period=${period}&user_id=${currentUserSession}`);
                 const data = await res.json();
                 let payload = data;
                 if (typeof data.body === 'string') payload = JSON.parse(data.body); else if (data.body) payload = data.body;
@@ -432,7 +439,6 @@
                     pnlEl.innerText = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${((totalPnl/100000.0)*100).toFixed(2)}%)`;
                     pnlEl.className = `text-2xl font-black mt-2 font-mono ${totalPnl >= 0 ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]'}`;
 
-                    // 🚀 修改：点击 SELL 调用 openTradeModal，传入当前价格和用户持有的股数
                     document.getElementById('fullHoldingsGrid').innerHTML = p.map((item) => {
                         const currentSpot = prices[item.ticker] || parseFloat(item.entry_price);
                         const pnl = (currentSpot - parseFloat(item.entry_price)) * parseFloat(item.quantity);
@@ -471,7 +477,6 @@
             } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Cloud Sync Failed</div>`; console.error(e); }
         }
 
-        // 🚀 核心升级：双端模态框控制 (处理买和卖)
         function openTradeModal(action = 'BUY', passedTicker = null, passedPrice = null, maxSellQty = null) { 
             currentTradeAction = action;
             if(passedTicker) activeTicker = passedTicker;
@@ -512,7 +517,6 @@
                 return;
             }
             
-            // 🚀 校验逻辑
             if (currentTradeAction === 'BUY') {
                 if (q * activePrice > globalAvailableCash) {
                     alert(`Insufficient Buying Power!\nRequired: $${(q * activePrice).toLocaleString()}\nAvailable: $${globalAvailableCash.toLocaleString()}`);
@@ -529,9 +533,9 @@
             btn.innerText = "Syncing to Cloud...";
             
             try {
-                // 动态根据行为选择调用后端的 add_trade 还是 sell_trade
                 const endpoint = currentTradeAction === 'BUY' ? 'add_trade' : 'sell_trade';
-                await fetch(`${API_URL}?action=${endpoint}&ticker=${activeTicker}&price=${activePrice}&quantity=${q}`);
+                // 🚀 发送 API 请求时带上身份证
+                await fetch(`${API_URL}?action=${endpoint}&ticker=${activeTicker}&price=${activePrice}&quantity=${q}&user_id=${currentUserSession}`);
                 
                 document.getElementById('tradeModal').style.display = 'none'; 
                 switchView('portfolio'); 
