@@ -105,7 +105,7 @@
                                 <span class="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">${stock.c}</span>
                             </div>
                             <p class="text-xs text-zinc-400 leading-relaxed font-light z-10 group-hover:text-zinc-300 transition-colors">
-                                <span class="text-blue-500 font-bold">AI SIGNAL:</span> ${stock.r}
+                                <span class="text-blue-500 font-bold">ANALYSIS:</span> ${stock.r}
                             </p>
                         </div>
                     `).join(''));
@@ -113,6 +113,7 @@
             </div>
         </div>
     </main>
+
     <main id="terminal-view" class="view-hidden w-full flex-grow flex flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500"></main>
 
     <main id="portfolio-view" class="view-hidden w-full flex-grow flex-col p-6 pt-40 max-w-[1800px] mx-auto transition-all duration-500">
@@ -120,6 +121,12 @@
             <div>
                 <h1 class="text-5xl font-black italic text-white uppercase tracking-tighter mb-2">Global Portfolio</h1>
                 <p class="text-sm text-zinc-500 font-mono tracking-widest uppercase">Aggregated Equity Curve</p>
+                <div class="flex items-center gap-4 mt-4">
+                    <div class="bg-emerald-500/10 border border-emerald-500/30 px-5 py-3 rounded-xl shadow-[0_0_15px_rgba(52,211,153,0.15)]">
+                        <p class="text-[10px] text-emerald-400 uppercase tracking-widest font-bold mb-1">Available Buying Power</p>
+                        <p class="text-2xl font-mono font-black text-white" id="portAvailableCash">$100,000.00</p>
+                    </div>
+                </div>
             </div>
             <div class="text-right">
                 <p class="text-xs text-zinc-500 font-bold uppercase tracking-widest mb-2">Total Account Value</p>
@@ -139,10 +146,17 @@
     </main>
 
     <div id="tradeModal" onclick="this.style.display='none'"><div class="glass p-10 max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
-        <div class="text-center mb-8"><h3 id="modalTicker" class="text-4xl font-black italic text-blue-500">--</h3><p class="text-xs text-zinc-500 uppercase tracking-widest font-bold mt-2">Terminal Execution</p></div>
+        <div class="text-center mb-8">
+            <h3 id="modalTicker" class="text-4xl font-black italic text-blue-500">--</h3>
+            <p id="modalActionText" class="text-xs text-zinc-500 uppercase tracking-widest font-bold mt-2">Terminal Execution</p>
+        </div>
         <div class="space-y-6">
             <div class="flex justify-between border-b border-white/5 pb-4"><span class="text-xs text-zinc-400 uppercase">Spot</span><span id="modalPrice" class="text-2xl font-bold text-white">$0.00</span></div>
-            <div class="flex flex-col gap-2"><label class="text-xs text-zinc-500 uppercase font-bold tracking-widest">Shares</label><input id="tradeQuantity" type="number" value="10" class="bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-2xl font-bold text-white focus:outline-none focus:border-blue-500"></div>
+            <div class="flex flex-col gap-2">
+                <label class="text-xs text-zinc-500 uppercase font-bold tracking-widest">Shares</label>
+                <input id="tradeQuantity" type="number" value="10" class="bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-2xl font-bold text-white focus:outline-none focus:border-blue-500">
+                <p class="text-[10px] text-zinc-400 uppercase tracking-widest mt-1" id="modalBuyingPower">Buying Power: <span class="text-emerald-400 font-bold">$100,000.00</span></p>
+            </div>
             <button onclick="confirmTrade()" id="tradeSubmitBtn" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all">Submit Order to Cloud</button>
         </div>
     </div></div>
@@ -156,19 +170,21 @@
         let currentChart = null, portChart = null;
         let activeTicker = 'NVDA', activePeriod = '6mo', activePrice = 0, monteCarloData = null;
         let portPeriod = '1mo'; 
+        let globalAvailableCash = 100000.0; 
 
-        // 🚀 修改：页面加载逻辑
+        // 🚀 新增：全局追踪当前的交易行为是买还是卖
+        let currentTradeAction = 'BUY'; 
+        let currentMaxSellQty = 0;
+
         window.onload = () => { 
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('view') === 'portfolio') {
                 switchView('portfolio');
             } else {
-                // 默认加载进入搜索大厅
                 switchView('home'); 
             }
         };
 
-        // 🚀 修改：视图切换逻辑 (增加对 home-view 和 searchBar 的控制)
         function switchView(view) {
             const searchBar = document.getElementById('searchBarContainer');
             homeContainer.classList.add('view-hidden');
@@ -199,7 +215,6 @@
             }
         }
 
-        // 🚀 新增：处理主页巨大搜索框的执行逻辑
         function executeHomeSearch(presetTicker = null) {
             const val = presetTicker || document.getElementById('bigSearchTicker').value.toUpperCase().trim();
             if(val) {
@@ -271,6 +286,7 @@
             const low52 = cur.low_52w || cur.price * 0.8; const high52 = cur.high_52w || cur.price * 1.2;
             const rangeProgress = Math.max(0, Math.min(100, ((cur.price - low52) / (high52 - low52)) * 100)).toFixed(1);
 
+            // 🚀 修改：点击买入按钮调用 openTradeModal('BUY')
             terminalContainer.innerHTML = `
                 <div class="w-full flex flex-col lg:flex-row gap-6 mb-8">
                     <div class="w-full lg:w-3/12 flex flex-col gap-6">
@@ -278,7 +294,7 @@
                             <span class="absolute text-[10rem] font-black text-white/[0.02] italic uppercase select-none pointer-events-none">${ticker}</span>
                             <span class="relative z-10 text-4xl font-black italic tracking-tighter text-blue-500 uppercase mb-4">${ticker}</span>
                             <h2 class="relative z-10 text-5xl font-black tracking-tighter italic uppercase ${cur.advice?.includes('BUY') ? 'text-blue-400' : cur.advice?.includes('SELL') ? 'text-rose-500' : 'text-zinc-500'}">${cur.advice || 'N/A'}</h2>
-                            <button onclick="openTradeModal()" class="relative z-10 w-full mt-8 bg-white/5 border border-white/10 hover:bg-blue-600 text-white py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">Execute Paper Trade</button>
+                            <button onclick="openTradeModal('BUY')" class="relative z-10 w-full mt-8 bg-white/5 border border-white/10 hover:bg-blue-600 text-white py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">Execute Paper Trade</button>
                         </div>
                         <div class="glass p-8 flex flex-col">
                             <span class="text-xs text-zinc-500 font-bold uppercase tracking-[0.2em] mb-6">52W Gravity Range</span>
@@ -396,26 +412,47 @@
 
                 const history = payload.history || [];
                 const currentVal = payload.current_value || 0;
+                
+                globalAvailableCash = payload.available_cash !== undefined ? payload.available_cash : 100000.0; 
+                
                 const p = payload.positions || [];
                 const prices = payload.current_prices || {};
 
+                document.getElementById('portAvailableCash').innerText = `$${globalAvailableCash.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
                 if (p.length === 0) {
-                    document.getElementById('portTotalValue').innerText = "$0.00";
+                    document.getElementById('portTotalValue').innerText = `$${currentVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('portTotalPnl').innerText = "Buy stocks in terminal to begin.";
                     document.getElementById('portTotalPnl').className = "text-lg font-black mt-2 font-mono text-zinc-500";
                     document.getElementById('fullHoldingsGrid').innerHTML = '<div class="col-span-full text-center text-zinc-600 italic mt-10 text-lg">No positions detected in AWS Cloud Matrix.</div>';
-                    if(portChart) portChart.destroy();
-                    return;
+                } else {
+                    const totalPnl = currentVal - 100000.0;
+                    document.getElementById('portTotalValue').innerText = `$${currentVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    const pnlEl = document.getElementById('portTotalPnl');
+                    pnlEl.innerText = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${((totalPnl/100000.0)*100).toFixed(2)}%)`;
+                    pnlEl.className = `text-2xl font-black mt-2 font-mono ${totalPnl >= 0 ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]'}`;
+
+                    // 🚀 修改：点击 SELL 调用 openTradeModal，传入当前价格和用户持有的股数
+                    document.getElementById('fullHoldingsGrid').innerHTML = p.map((item) => {
+                        const currentSpot = prices[item.ticker] || parseFloat(item.entry_price);
+                        const pnl = (currentSpot - parseFloat(item.entry_price)) * parseFloat(item.quantity);
+                        const positionValue = currentSpot * parseFloat(item.quantity);
+                        const allocation = ((positionValue / currentVal) * 100).toFixed(1);
+                        
+                        return `
+                            <div class="glass p-8 border border-white/5 relative group hover:border-purple-500/50 transition-all flex flex-col justify-between">
+                                <div class="flex justify-between items-start mb-6">
+                                    <div><span class="text-3xl font-black italic text-white">${item.ticker}</span> <span class="text-sm text-zinc-500 ml-2 block mt-1">${item.quantity} Shares <span class="text-[9px] text-blue-400 border border-blue-400/30 px-1 ml-1 rounded">CLOUD</span></span></div>
+                                    <button onclick="openTradeModal('SELL', '${item.ticker}', ${currentSpot}, ${item.quantity})" class="text-xs font-black bg-rose-500/10 text-rose-500 px-6 py-2.5 rounded border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all uppercase shadow-[0_0_10px_rgba(244,63,94,0.1)]">SELL</button>
+                                </div>
+                                <div class="flex justify-between items-end border-t border-white/10 pt-4">
+                                    <div><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">Entry / Alloc</p><p class="text-lg font-bold font-mono text-zinc-300">$${parseFloat(item.entry_price).toFixed(2)} <span class="text-xs text-purple-400 ml-1">(${allocation}%)</span></p></div>
+                                    <div class="text-right"><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">P&L</p><p class="text-xl font-black ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'} font-mono">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</p></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
                 }
-
-                let totalCost = 0;
-                p.forEach(item => { totalCost += (parseFloat(item.entry_price) * parseFloat(item.quantity)); });
-                const totalPnl = currentVal - totalCost;
-
-                document.getElementById('portTotalValue').innerText = `$${currentVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                const pnlEl = document.getElementById('portTotalPnl');
-                pnlEl.innerText = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${((totalPnl/totalCost)*100).toFixed(2)}%)`;
-                pnlEl.className = `text-2xl font-black mt-2 font-mono ${totalPnl >= 0 ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]'}`;
 
                 portContainer.innerHTML = '<canvas id="portfolioChart"></canvas>';
                 const ctx = document.getElementById('portfolioChart').getContext('2d');
@@ -431,52 +468,78 @@
                     options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false }, tooltip: { enabled: true, titleFont: {size: 14}, bodyFont: {size: 16}, padding: 12, backgroundColor: 'rgba(3, 5, 10, 0.95)', callbacks: { title: (i) => i[0].label, label: (i) => ` Total: $${i.parsed.y.toLocaleString()}` } } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 14 } } } } } 
                 });
 
-                document.getElementById('fullHoldingsGrid').innerHTML = p.map((item) => {
-                    const currentSpot = prices[item.ticker] || parseFloat(item.entry_price);
-                    const pnl = (currentSpot - parseFloat(item.entry_price)) * parseFloat(item.quantity);
-                    return `
-                        <div class="glass p-8 border border-white/5 relative group hover:border-purple-500/50 transition-all flex flex-col justify-between">
-                            <div class="flex justify-between items-start mb-6">
-                                <div><span class="text-3xl font-black italic text-white">${item.ticker}</span> <span class="text-sm text-zinc-500 ml-2 block mt-1">${item.quantity} Shares <span class="text-[9px] text-blue-400 border border-blue-400/30 px-1 ml-1 rounded">CLOUD</span></span></div>
-                                <button onclick="sellHolding('${item.ticker}')" class="text-xs font-black bg-rose-500/10 text-rose-500 px-4 py-2 rounded border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all uppercase">Liquidate</button>
-                            </div>
-                            <div class="flex justify-between items-end border-t border-white/10 pt-4">
-                                <div><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">Entry</p><p class="text-lg font-bold font-mono text-zinc-300">$${parseFloat(item.entry_price).toFixed(2)}</p></div>
-                                <div class="text-right"><p class="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-1">P&L</p><p class="text-xl font-black ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'} font-mono">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</p></div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
             } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Cloud Sync Failed</div>`; console.error(e); }
         }
 
-        function openTradeModal() { document.getElementById('modalTicker').innerText = activeTicker; document.getElementById('modalPrice').innerText = `$${activePrice}`; document.getElementById('tradeModal').style.display = 'flex'; }
+        // 🚀 核心升级：双端模态框控制 (处理买和卖)
+        function openTradeModal(action = 'BUY', passedTicker = null, passedPrice = null, maxSellQty = null) { 
+            currentTradeAction = action;
+            if(passedTicker) activeTicker = passedTicker;
+            if(passedPrice) activePrice = passedPrice;
+            currentMaxSellQty = maxSellQty;
+
+            document.getElementById('modalTicker').innerText = activeTicker; 
+            document.getElementById('modalPrice').innerText = `$${activePrice.toFixed(2)}`; 
+            
+            const btn = document.getElementById('tradeSubmitBtn');
+            const actionText = document.getElementById('modalActionText');
+            const buyingPowerText = document.getElementById('modalBuyingPower');
+            const quantityInput = document.getElementById('tradeQuantity');
+
+            if (action === 'BUY') {
+                document.getElementById('modalTicker').className = "text-4xl font-black italic text-blue-500";
+                if(actionText) actionText.innerText = "Execute Buy Order";
+                btn.className = "w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all";
+                btn.innerText = "Submit Buy Order";
+                quantityInput.value = 10;
+                buyingPowerText.innerHTML = `Buying Power: <span class="text-emerald-400 font-bold">$${globalAvailableCash.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+            } else {
+                document.getElementById('modalTicker').className = "text-4xl font-black italic text-rose-500";
+                if(actionText) actionText.innerText = "Execute Sell Order";
+                btn.className = "w-full bg-rose-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all";
+                btn.innerText = "Submit Sell Order";
+                quantityInput.value = maxSellQty; 
+                buyingPowerText.innerHTML = `Available to Sell: <span class="text-rose-400 font-bold">${maxSellQty} Shares</span>`;
+            }
+            
+            document.getElementById('tradeModal').style.display = 'flex'; 
+        }
         
         async function confirmTrade() { 
             const q = parseFloat(document.getElementById('tradeQuantity').value); 
+            if (isNaN(q) || q <= 0) {
+                alert("Please enter a valid quantity.");
+                return;
+            }
+            
+            // 🚀 校验逻辑
+            if (currentTradeAction === 'BUY') {
+                if (q * activePrice > globalAvailableCash) {
+                    alert(`Insufficient Buying Power!\nRequired: $${(q * activePrice).toLocaleString()}\nAvailable: $${globalAvailableCash.toLocaleString()}`);
+                    return;
+                }
+            } else if (currentTradeAction === 'SELL') {
+                if (q > currentMaxSellQty) {
+                    alert(`Exceeds owned shares!\nYou only own ${currentMaxSellQty} shares of ${activeTicker}.`);
+                    return;
+                }
+            }
+
             const btn = document.getElementById('tradeSubmitBtn');
             btn.innerText = "Syncing to Cloud...";
             
             try {
-                await fetch(`${API_URL}?action=add_trade&ticker=${activeTicker}&price=${activePrice}&quantity=${q}`);
+                // 动态根据行为选择调用后端的 add_trade 还是 sell_trade
+                const endpoint = currentTradeAction === 'BUY' ? 'add_trade' : 'sell_trade';
+                await fetch(`${API_URL}?action=${endpoint}&ticker=${activeTicker}&price=${activePrice}&quantity=${q}`);
+                
                 document.getElementById('tradeModal').style.display = 'none'; 
                 switchView('portfolio'); 
             } catch(e) {
                 console.error("Cloud Error", e);
                 alert("Failed to sync trade to AWS.");
             } finally {
-                btn.innerText = "Submit Order to Cloud";
-            }
-        }
-
-        async function sellHolding(ticker) { 
-            try {
-                await fetch(`${API_URL}?action=liquidate&ticker=${ticker}`);
-                loadPortfolioData(portPeriod); 
-            } catch(e) {
-                console.error("Cloud Error", e);
-                alert("Failed to liquidate position in AWS.");
+                btn.innerText = currentTradeAction === 'BUY' ? "Submit Buy Order" : "Submit Sell Order";
             }
         }
     </script>
