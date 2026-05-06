@@ -1,2 +1,2 @@
-python/* linguist-vendored
+python/** linguist-vendored
 *.zip linguist-vendored
