@@ -1,4 +1,4 @@
-# AlphaTrack Verified v5.2 🚀
+# AlphaTrack 🚀
 ### **Institutional-Grade Quantitative Intelligence Terminal**
 
 **AlphaTrack Verified** is a high-performance, cloud-native stock analysis engine. It leverages a serverless AWS architecture to synthesize real-time technical signals, options flow, and SEC insider filings into a single actionable matrix. 
