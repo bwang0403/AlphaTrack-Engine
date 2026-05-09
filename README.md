@@ -3,6 +3,7 @@
 **Institutional-Grade High-Frequency Trading & AI Analysis Suite**
 
 AlphaTrack is a cloud-native quantitative terminal built on a decoupled serverless architecture. It migrates traditional financial analysis into a high-concurrency, AI-augmented environment.
+- live demo: https://bwang0403.github.io/AlphaTrack-Engine/
 
 ## 🌟 Modern Enterprise Architecture (The 5 Pillars)
 
