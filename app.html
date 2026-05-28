@@ -188,6 +188,10 @@
         let liveSocket = null;
         let wsFallbackInterval = null;
 
+        // 🚀 PHASE 1: WebSocket Exponential Backoff State
+        let wsReconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 4;
+
         const monteCarloWorkerCode = `
             self.onmessage = function(e) {
                 const { price, vol, days, iterations } = e.data;
@@ -294,14 +298,27 @@
             } catch(e) { terminalContainer.innerHTML = `<div class="flex items-center justify-center h-[60vh]"><div class="glass p-12 text-rose-500 font-black uppercase tracking-widest text-center text-lg">Connection Severed<br><span class="text-sm text-zinc-600 mt-4 block">${e.message}</span></div></div>`; }
         }
 
+        // 🚀 PHASE 1: Rewritten startWebSocketEngine with Exponential Backoff
         function startWebSocketEngine(ticker) {
             const statusEl = document.getElementById('wssStatus');
+            connectWSS(ticker, statusEl);
+        }
+
+        function connectWSS(ticker, statusEl) {
             try {
                 liveSocket = new WebSocket(WSS_URL);
                 liveSocket.onopen = () => {
+                    wsReconnectAttempts = 0; // Reset backoff on success
                     statusEl.innerText = "WSS:// CONNECTED";
                     statusEl.className = "text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 font-bold";
                     liveSocket.send(JSON.stringify({ action: "stream_ticks", ticker: ticker, price: activePrice }));
+                    
+                    // Setup Ping/Pong Heartbeat
+                    liveSocket.pingInterval = setInterval(() => {
+                        if (liveSocket.readyState === WebSocket.OPEN) {
+                            liveSocket.send(JSON.stringify({ action: "ping" }));
+                        }
+                    }, 30000);
                 };
                 liveSocket.onmessage = (event) => {
                     const data = JSON.parse(event.data);
@@ -311,9 +328,28 @@
                         updateLiveUI(data.is_buy, data.timestamp);
                     }
                 };
-                liveSocket.onerror = () => { triggerWSFallback(statusEl); };
-                liveSocket.onclose = () => { triggerWSFallback(statusEl); };
+                liveSocket.onerror = () => { handleWSSDrop(ticker, statusEl); };
+                liveSocket.onclose = () => { handleWSSDrop(ticker, statusEl); };
             } catch(e) {
+                handleWSSDrop(ticker, statusEl);
+            }
+        }
+
+        // 🚀 PHASE 1: Exponential Backoff Handler
+        function handleWSSDrop(ticker, statusEl) {
+            if (liveSocket && liveSocket.pingInterval) clearInterval(liveSocket.pingInterval);
+            
+            if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                const backoffTime = Math.pow(2, wsReconnectAttempts) * 1000;
+                wsReconnectAttempts++;
+                
+                if(statusEl) {
+                    statusEl.innerText = `WSS:// RECONNECTING (${wsReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`;
+                    statusEl.className = "text-[9px] bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded border border-orange-500/30 font-bold animate-pulse";
+                }
+                
+                setTimeout(() => { connectWSS(ticker, statusEl); }, backoffTime);
+            } else {
                 triggerWSFallback(statusEl);
             }
         }
@@ -347,7 +383,6 @@
             }
 
             if(currentChart) {
-                // 🚀 核心修复：不 push 新的时间戳和点，只修改最后一个点的价格，保持 X 轴比例不变
                 const dataArr = currentChart.data.datasets[0].data;
                 if(dataArr.length > 0) {
                     dataArr[dataArr.length - 1] = activePrice;
@@ -558,7 +593,6 @@
                         ctx.font = 'bold 10px monospace'; 
                         ctx.fillText('AI PROJ', startX + 5, (upperY + lowerY)/2); 
                         
-                        // 🚀 新增：顶点高频跳动发光指示器
                         ctx.beginPath();
                         const pulseRadius = 6 + 2 * Math.abs(Math.sin(Date.now() / 200));
                         ctx.arc(startX, startY, pulseRadius, 0, 2 * Math.PI);
@@ -707,8 +741,18 @@
             
             try {
                 const endpoint = currentTradeAction === 'BUY' ? 'add_trade' : 'sell_trade';
-                const response = await fetch(`${API_URL}?action=${endpoint}&ticker=${activeTicker}&price=${activePrice}&quantity=${q}&user_id=${currentUserSession}`);
                 
+                // 🚀 PHASE 1: Generate Idempotency Key (UUID) to prevent duplicate executions
+                const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : 'idk_' + Date.now() + Math.random().toString(36).substring(2);
+                
+                const response = await fetch(`${API_URL}?action=${endpoint}&ticker=${activeTicker}&price=${activePrice}&quantity=${q}&user_id=${currentUserSession}&idempotency_key=${idempotencyKey}`);
+                const responseData = await response.json();
+
+                // 拦截到了幂等性缓存！说明我们在弱网下狂点了，但后端只认第一次
+                if (response.status === 200 && responseData.status === "idempotent_cached") {
+                    console.warn("Idempotent lock triggered: Prevented duplicate order transmission.");
+                }
+
                 if (response.status === 202) {
                     btn.innerText = "Order in SQS Queue...";
                     setTimeout(() => {
