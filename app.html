@@ -684,7 +684,8 @@
             } catch (e) { portContainer.innerHTML = `<div class="absolute inset-0 flex justify-center items-center text-rose-500 font-bold uppercase tracking-widest text-lg">Cloud Sync Failed</div>`; console.error(e); }
         }
 
-        let currentIdempotencyKey = null; /
+        let currentIdempotencyKey = null; 
+        let isTradeProcessing = false; // 🚀 终极物理死锁：绝对禁止并发请求
 
         function openTradeModal(action = 'BUY', passedTicker = null, passedPrice = null, maxSellQty = null) { 
             currentTradeAction = action;
@@ -692,14 +693,15 @@
             if(passedPrice) activePrice = passedPrice;
             currentMaxSellQty = maxSellQty;
 
-            
+            // 每次打开弹窗，生成唯一身份标识
             currentIdempotencyKey = crypto.randomUUID ? crypto.randomUUID() : 'idk_' + Date.now() + Math.random().toString(36).substring(2);
+            isTradeProcessing = false; // 重置死锁
 
             document.getElementById('modalTicker').innerText = activeTicker; 
             document.getElementById('modalPrice').innerText = `$${activePrice.toFixed(2)}`; 
             
             const btn = document.getElementById('tradeSubmitBtn');
-            btn.disabled = false; 
+            btn.disabled = false;
             btn.style.opacity = '1';
 
             const actionText = document.getElementById('modalActionText');
@@ -726,6 +728,12 @@
         }
         
         async function confirmTrade() { 
+            // 🚀 核弹级拦截：如果锁被锁上了，直接吃掉这个点击，不执行任何操作！
+            if (isTradeProcessing) {
+                console.log("拦截到了狂暴连点，已物理吃掉此请求！");
+                return;
+            }
+
             const q = parseFloat(document.getElementById('tradeQuantity').value); 
             if (isNaN(q) || q <= 0) {
                 alert("Please enter a valid quantity.");
@@ -744,10 +752,10 @@
                 }
             }
 
-            const btn = document.getElementById('tradeSubmitBtn');
+            // 🚀 上锁！
+            isTradeProcessing = true;
             
-        
-            if (btn.disabled) return; 
+            const btn = document.getElementById('tradeSubmitBtn');
             btn.disabled = true;
             btn.style.opacity = '0.5';
             btn.innerText = "Syncing to Cloud...";
@@ -755,11 +763,9 @@
             try {
                 const endpoint = currentTradeAction === 'BUY' ? 'add_trade' : 'sell_trade';
                 
-                
                 const response = await fetch(`${API_URL}?action=${endpoint}&ticker=${activeTicker}&price=${activePrice}&quantity=${q}&user_id=${currentUserSession}&idempotency_key=${currentIdempotencyKey}`);
                 const responseData = await response.json();
 
-                
                 if (response.status === 200 && responseData.status === "idempotent_cached") {
                     console.warn("Idempotent lock triggered: Prevented duplicate order transmission.");
                 }
@@ -774,11 +780,9 @@
                 }
 
                 if (response.status === 409) {
-                    alert("⚠️ [SYSTEM OVERRIDE] QUANTUM LOCK TRIGGERED!\n\nAWS DynamoDB has blocked this transaction due to a concurrent modification (Optimistic Lock). This prevents race conditions and over-selling in high-frequency trading.\n\nPlease refresh your portfolio and try again.");
-                    btn.innerText = currentTradeAction === 'BUY' ? "Submit Buy Order" : "Submit Sell Order";
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    return;
+                    alert("⚠️ [SYSTEM OVERRIDE] QUANTUM LOCK TRIGGERED!\n\nAWS DynamoDB has blocked this transaction due to a concurrent modification (Optimistic Lock).");
+                } else if (!response.ok) {
+                    throw new Error("Server response was not ok");
                 }
 
                 document.getElementById('tradeModal').style.display = 'none'; 
@@ -786,9 +790,12 @@
             } catch(e) {
                 console.error("Cloud Error", e);
                 alert("Failed to sync trade to AWS.");
+            } finally {
+                // 恢复按钮状态，并解锁（只有在发生错误，或者弹窗真的关掉后才允许下一次交易）
                 btn.disabled = false;
                 btn.style.opacity = '1';
                 btn.innerText = currentTradeAction === 'BUY' ? "Submit Buy Order" : "Submit Sell Order";
+                // 锁会在下一次调用 openTradeModal 时被重置为 false
             }
         }
     </script>
