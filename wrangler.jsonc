@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "alphatrack-engine",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "alphatrack-db",
+      "database_id": "b869051d-9885-4cba-801c-a6c46fdb81c0",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "ORDER_QUEUE", "queue": "alphatrack-orders" }
+    ],
+    "consumers": [
+      {
+        "queue": "alphatrack-orders",
+        "max_batch_size": 10,
+        "max_concurrency": 1,
+        "dead_letter_queue": "alphatrack-orders-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["0 4 * * *"]
+  },
+  "vars": {
+    "ALPACA_DATA_BASE_URL": "https://data.alpaca.markets",
+    "APP_ENV": "production"
+  }
+}
