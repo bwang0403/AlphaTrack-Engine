@@ -65,6 +65,23 @@ try {
   await until(async () => await evaluate("document.body?.innerText.includes('INSTANT DEMO ACCOUNT SIGN-IN')"));
   await evaluate("document.querySelector('.demo-button').click()");
   await until(async () => await evaluate("document.body?.innerText.includes('PAPER ORDER') && document.body?.innerText.includes('SIGN OUT')"));
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  const workstation = await until(async () => {
+    const state = await evaluate(`(() => {
+      const chart = document.querySelector('.chart-panel')?.getBoundingClientRect();
+      const ticket = document.querySelector('.order-ticket')?.getBoundingClientRect();
+      const dock = document.querySelector('.bottom-dock')?.getBoundingClientRect();
+      const main = document.querySelector('main');
+      return { route: location.hash, chartWidth: chart?.width, sideBySide: !!chart && !!ticket && ticket.left >= chart.right,
+        dockBelow: !!dock && !!chart && dock.top >= chart.bottom, dockVisible: !!dock && dock.bottom <= innerHeight,
+        noPageScroll: !!main && main.scrollHeight <= main.clientHeight + 2,
+        candles: !!document.querySelector('.chart-modes button:last-child') };
+    })()`);
+    return state.chartWidth && state.sideBySide && state.dockBelow && state.dockVisible && state.noPageScroll && state.candles ? state : null;
+  });
+  assert.equal(workstation.route, "#/terminal");
+  await evaluate("document.querySelector('.chart-modes button:last-child').click()");
+  assert.ok(await evaluate("document.querySelector('svg[aria-label*=" + JSON.stringify("Candlestick") + "]') !== null"));
   await evaluate("Array.from(document.querySelectorAll('nav button')).find(button => button.innerText.includes('System')).click()");
   await until(async () => await evaluate("document.body?.innerText.includes('LIVE D1 ORDER STATES') && document.body?.innerText.includes('AUTHENTICATION AND RATE LIMITS')"));
   const visible = await until(async () => {
@@ -73,7 +90,7 @@ try {
   });
   assert.equal(visible.title, "System health");
   assert.ok(visible.d1 && visible.iex && visible.user && visible.orderStates);
-  console.log(JSON.stringify({ base: new URL(base).origin, headlessChrome: "ok", demoSignIn: "ok", systemView: "ok", ...visible }));
+  console.log(JSON.stringify({ base: new URL(base).origin, headlessChrome: "ok", demoSignIn: "ok", workstation: "ok", systemView: "ok", ...visible }));
 } finally {
   socket?.close();
   chrome.kill();
