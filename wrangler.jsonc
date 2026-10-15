@@ -34,7 +34,7 @@
     ]
   },
   "triggers": {
-    "crons": ["0 4 * * *"]
+    "crons": ["*/5 * * * *", "0 4 * * *"]
   },
   "vars": {
     "ALPACA_DATA_BASE_URL": "https://data.alpaca.markets",

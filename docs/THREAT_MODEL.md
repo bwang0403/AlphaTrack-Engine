@@ -20,11 +20,12 @@ The browser is untrusted. Symbols, sides, quantities, idempotency keys, cookies,
 | Session enumeration | 256-bit random token; only its SHA-256 hash plus a secret pepper is stored |
 | Cross-site session use | SameSite=Strict cookie; same-origin API; production Secure cookie |
 | Duplicate click or network replay | Unique `(account_id, idempotency_key)` database constraint |
-| Queue at-least-once replay | Conditional `PENDING → PROCESSING` claim and unique trade per order |
+| Queue at-least-once replay | Conditional `PENDING → PROCESSING` claim, unique trade per order, and transaction mutations guarded by the newly inserted trade ID |
 | Overspending or overselling | Server-side integer arithmetic and ledger policy validation |
 | Invalid JSON numbers | Non-finite provider values rejected before response serialization |
 | Secret disclosure | Worker secrets only; `.dev.vars` ignored; no keys in browser or repository |
 | Provider outage | Explicit error or retry; no synthetic price fallback |
+| Abandoned order after interrupted queue send or worker execution | Five-minute scheduled recovery requeues orders whose `PENDING` or `PROCESSING` state is over ten minutes old |
 | Abuse of public demo | D1-backed fixed-window limits for session creation, market reads, and order creation; client addresses are peppered and hashed before persistence |
 | Unbounded anonymous data retention | Daily scheduled cleanup removes expired sessions, stale anonymous accounts, and old rate-limit buckets |
 
@@ -33,5 +34,5 @@ The browser is untrusted. Symbols, sides, quantities, idempotency keys, cookies,
 - Set a production session pepper through Worker secrets.
 - Use least-privilege Alpaca market-data credentials.
 - Verify CORS remains same-origin.
-- Configure Queue dead-letter monitoring and retention expectations.
+- Configure Queue dead-letter monitoring and retention expectations; the System view does not expose live Queue metrics.
 - Run concurrency, replay, and load tests against the deployed free-tier limits.

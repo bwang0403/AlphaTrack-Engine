@@ -72,11 +72,13 @@ describe("Alpaca market-data adapter", () => {
   });
 
   it("rejects invalid latest-trade data", async () => {
-    const fetcher = successfulFetcher([
-      { t: "2026-09-15T20:00:00Z", o: 100, h: 104, l: 99, c: 102, v: 1000 },
-      { t: "2026-09-16T20:00:00Z", o: 102, h: 107, l: 101, c: 105, v: 1200 }
-    ], Number.NaN);
-    await expect(new AlpacaMarketData(environment(), fetcher).history("NVDA", "5d")).rejects.toMatchObject({ code: "INVALID_PROVIDER_DATA" });
+    for (const price of [Number.NaN, 0, -1]) {
+      const fetcher = successfulFetcher([
+        { t: "2026-09-15T20:00:00Z", o: 100, h: 104, l: 99, c: 102, v: 1000 },
+        { t: "2026-09-16T20:00:00Z", o: 102, h: 107, l: 101, c: 105, v: 1200 }
+      ], price);
+      await expect(new AlpacaMarketData(environment(), fetcher).history("NVDA", "5d")).rejects.toMatchObject({ code: "INVALID_PROVIDER_DATA" });
+    }
   });
 
   it("maps upstream and network failures to explicit service errors", async () => {

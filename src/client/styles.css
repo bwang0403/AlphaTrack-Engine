@@ -112,6 +112,7 @@ h2 { margin: 3px 0 0; font-size: 20px; }
 .metric { padding: 20px; min-height: 105px; }
 .metric strong { display: block; margin-top: 20px; font: 500 clamp(16px, 2vw, 23px) "DM Mono", monospace; }
 .table-panel { padding: 22px; overflow: auto; }
+.pipeline-note { color: #9ba9b6; font-size: 12px; margin: -6px 0 16px; }
 table { width: 100%; border-collapse: collapse; min-width: 680px; }
 th { color: #65727f; font: 500 9px "DM Mono", monospace; letter-spacing: .13em; text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--line); }
 td { padding: 17px 12px; border-bottom: 1px solid #192029; color: #a9b3be; font: 12px "DM Mono", monospace; }

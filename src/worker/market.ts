@@ -54,13 +54,12 @@ export class AlpacaMarketData {
       throw new ApiError(404, "MARKET_DATA_NOT_FOUND", `No usable market data was found for ${symbol}`);
     }
 
-    const latest = bars[bars.length - 1];
-    const price = finite(snapshot.latestTrade?.p);
-    const previousClose = finite(snapshot.prevDailyBar?.c);
+    const price = positive(snapshot.latestTrade?.p);
+    const previousClose = positive(snapshot.prevDailyBar?.c);
     const asOf = validTimestamp(snapshot.latestTrade?.t);
     const receivedAt = new Date().toISOString();
     const ageMs = Date.now() - new Date(asOf).getTime();
-    const freshness = ageMs <= 24 * 60 * 60 * 1000 ? "LIVE" : ageMs <= 4 * 24 * 60 * 60 * 1000 ? "DELAYED" : "STALE";
+    const freshness = ageMs >= 0 && ageMs <= 60_000 ? "LIVE" : ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000 ? "DELAYED" : "STALE";
     const change = price - previousClose;
 
     return {
@@ -79,7 +78,8 @@ export class AlpacaMarketData {
 
   async latestPriceCents(symbol: string): Promise<number> {
     const snapshot = await this.snapshot(symbol);
-    return Math.round(finite(snapshot.latestTrade?.p) * 100);
+    validTimestamp(snapshot.latestTrade?.t);
+    return Math.round(positive(snapshot.latestTrade?.p) * 100);
   }
 
   private async snapshot(symbol: string): Promise<AlpacaSnapshotResponse> {
@@ -120,11 +120,11 @@ export class AlpacaMarketData {
 function normalizeBar(bar: AlpacaBar): Bar {
   return {
     timestamp: validTimestamp(bar.t),
-    open: finite(bar.o),
-    high: finite(bar.h),
-    low: finite(bar.l),
-    close: finite(bar.c),
-    volume: finite(bar.v)
+    open: positive(bar.o),
+    high: positive(bar.h),
+    low: positive(bar.l),
+    close: positive(bar.c),
+    volume: nonnegative(bar.v)
   };
 }
 
@@ -133,6 +133,18 @@ function finite(value: unknown): number {
     throw new ApiError(502, "INVALID_PROVIDER_DATA", "Market data provider returned a non-finite value");
   }
   return Math.round(value * 10000) / 10000;
+}
+
+function positive(value: unknown): number {
+  const number = finite(value);
+  if (number <= 0) throw new ApiError(502, "INVALID_PROVIDER_DATA", "Market data provider returned a non-positive price");
+  return number;
+}
+
+function nonnegative(value: unknown): number {
+  const number = finite(value);
+  if (number < 0) throw new ApiError(502, "INVALID_PROVIDER_DATA", "Market data provider returned a negative volume");
+  return number;
 }
 
 function validTimestamp(value: unknown): string {

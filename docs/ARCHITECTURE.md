@@ -32,9 +32,9 @@ D1 also stores fixed-window counters for session creation, market reads, and ord
 
 ### Queue worker
 
-New orders are written to D1 before their command enters the queue. The consumer claims `PENDING` orders by moving them to `PROCESSING`, obtains a server-side price, applies the ledger mutation, inserts a trade, and marks the order `FILLED`. Business-rule failures become `REJECTED`. Provider failures return the order to `PENDING` and retry with bounded exponential delay. Exhausted messages go to the configured dead-letter queue.
+New orders are written to D1 before their command enters the queue. The consumer claims `PENDING` orders by moving them to `PROCESSING`, obtains a server-side price, and atomically inserts a unique trade, applies guarded ledger mutations, and marks the order `FILLED`. Business-rule failures become `REJECTED`. Provider or database failures return the order to `PENDING` for queue retry with bounded exponential delay. A five-minute scheduled check requeues orders stalled for over ten minutes. Exhausted messages go to the configured dead-letter queue; the app does not expose live queue or DLQ metrics.
 
-Queue concurrency is set to one for this single-ledger demo. This avoids write races while preserving asynchronous delivery, retry, replay, and backlog behavior. A future multi-tenant version can shard account commands by account ID through stateful per-account coordinators.
+Queue concurrency is set to one for this single-ledger demo. The database's unique trade key and trade-ID-guarded mutations provide the final replay protection even when a stalled claim is recovered while its original worker resumes. A future multi-tenant version can shard account commands by account ID through stateful per-account coordinators.
 
 ## Failure behavior
 
@@ -54,4 +54,5 @@ Queue concurrency is set to one for this single-ledger demo. This avoids write r
 - Market bars use Alpaca's free IEX feed, not consolidated SIP data.
 - The portfolio screen currently reports cash plus cost basis; live portfolio valuation will be added only when every position has a verified current quote.
 - Sessions are anonymous seven-day demo sessions, not identity-provider accounts.
+- The System view describes configured architecture and observed API/market state, not live queue depth.
 - The legacy Python Lambda remains in the repository during migration and is not used by the v2 Worker.

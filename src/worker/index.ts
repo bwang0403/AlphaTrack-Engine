@@ -1,6 +1,6 @@
 import { ApiError, json, problem, readJson } from "./http";
 import { AlpacaMarketData } from "./market";
-import { executeOrder, getPortfolio, listOrders, submitOrder } from "./orders";
+import { executeOrder, getPortfolio, listOrders, recoverStalledOrders, submitOrder } from "./orders";
 import { enforceRateLimit, requestClientKey } from "./rate-limit";
 import { createSession, requireSession } from "./session";
 import type { Env, OrderCommand } from "./types";
@@ -71,7 +71,10 @@ const worker: ExportedHandler<Env, OrderCommand> = {
     }
   },
 
-  async scheduled(_controller, env): Promise<void> {
+  async scheduled(controller, env): Promise<void> {
+    const requeued = await recoverStalledOrders(env);
+    console.log(JSON.stringify({ event: "order.recovery", requeued }));
+    if (controller.cron !== "0 4 * * *") return;
     const now = new Date();
     const accountCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const rateLimitCutoff = now.getTime() - 2 * 24 * 60 * 60 * 1000;

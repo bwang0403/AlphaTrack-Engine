@@ -55,8 +55,8 @@ export default function App() {
     api.health().then(setHealth).catch(cause => setError(formatError(cause)));
   }, [view]);
 
-  const cashAndCostBasis = useMemo(() => (portfolio?.cashCents ?? 0) / 100 + (portfolio?.positions ?? []).reduce(
-    (total, position) => total + (position.averageCostCents / 100) * position.quantity,
+  const cashAndCostBasisCents = useMemo(() => (portfolio?.cashCents ?? 0) + (portfolio?.positions ?? []).reduce(
+    (total, position) => total + position.averageCostCents * position.quantity,
     0
   ), [portfolio]);
 
@@ -89,10 +89,11 @@ export default function App() {
         idempotencyKey
       });
       pendingIdempotencyKey.current = null;
-      setOrderMessage(result.replayed ? "Existing order returned safely." : "Order accepted and queued for execution.");
+      setOrderMessage(result.replayed ? "Idempotency replay: existing order returned safely." : "Order accepted · idempotency key stored · awaiting queue execution.");
       const terminalOrder = await waitForOrder(result.order.id);
       if (terminalOrder?.status === "FILLED") setOrderMessage(`Order filled at $${((terminalOrder.filledPriceCents ?? 0) / 100).toFixed(2)}.`);
       if (terminalOrder?.status === "REJECTED") setOrderMessage(`Order rejected: ${terminalOrder.rejectionReason ?? "business rule failed"}.`);
+      if (!terminalOrder) setOrderMessage("Order remains pending. Check Orders for the latest queue state.");
       await refreshAccount();
     } catch (cause) {
       if (cause instanceof ApiClientError && cause.status < 500) pendingIdempotencyKey.current = null;
@@ -143,7 +144,7 @@ export default function App() {
         {error && <div className="alert"><strong>REQUEST FAILED</strong><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
         {view === "market" && <MarketView market={market} symbol={symbol} period={period} loading={loading} quantity={quantity} side={side} orderMessage={orderMessage} submitting={submittingOrder}
           onPeriod={setPeriod} onQuantity={setQuantity} onSide={setSide} onOrder={placeOrder} />}
-        {view === "portfolio" && <PortfolioView portfolio={portfolio} cashAndCostBasis={cashAndCostBasis} onRefresh={refreshAccount} />}
+        {view === "portfolio" && <PortfolioView portfolio={portfolio} cashAndCostBasisCents={cashAndCostBasisCents} onRefresh={refreshAccount} />}
         {view === "orders" && <OrdersView orders={orders} onRefresh={refreshAccount} />}
         {view === "system" && <SystemView health={health} market={market} />}
       </main>
@@ -177,7 +178,7 @@ function MarketView(props: {
     </section>
     <div className="terminal-grid">
       <section className="panel chart-panel">
-        <div className="panel-head"><div><p className="eyebrow">DAILY CLOSE</p><span className="source-label">SOURCE · {market?.provider.toUpperCase() ?? "UNAVAILABLE"}</span></div><div className="periods">{PERIODS.map(item => <button key={item} className={props.period === item ? "active" : ""} onClick={() => props.onPeriod(item)}>{item}</button>)}</div></div>
+        <div className="panel-head"><div><p className="eyebrow">DAILY CLOSE</p><span className="source-label">SOURCE · {market?.provider.toUpperCase() ?? "UNAVAILABLE"} {market ? `· ${market.feed.toUpperCase()} FEED · ${market.freshness}` : ""}</span></div><div className="periods">{PERIODS.map(item => <button key={item} className={props.period === item ? "active" : ""} onClick={() => props.onPeriod(item)}>{item}</button>)}</div></div>
         {props.loading ? <div className="loading">CONTACTING MARKET DATA PROVIDER…</div> : market ? <PriceChart bars={market.bars} /> : <div className="empty-chart">Live data unavailable. No synthetic fallback is used.</div>}
         {market && <div className="data-foot"><span>AS OF {formatTime(market.asOf)}</span><span>RECEIVED {formatTime(market.receivedAt)}</span><span>{market.bars.length} VERIFIED BARS</span></div>}
       </section>
@@ -195,23 +196,25 @@ function MarketView(props: {
   </>;
 }
 
-function PortfolioView({ portfolio, cashAndCostBasis, onRefresh }: { portfolio: Portfolio | null; cashAndCostBasis: number; onRefresh: () => void }) {
+function PortfolioView({ portfolio, cashAndCostBasisCents, onRefresh }: { portfolio: Portfolio | null; cashAndCostBasisCents: number; onRefresh: () => void }) {
   return <><PageHeading eyebrow="PAPER ACCOUNT" title="Portfolio" action={onRefresh} />
-    <div className="metric-grid"><Metric label="CASH + COST BASIS" value={`$${cashAndCostBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} /><Metric label="AVAILABLE CASH" value={`$${((portfolio?.cashCents ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} /><Metric label="OPEN POSITIONS" value={String(portfolio?.positions.length ?? 0)} /><Metric label="LEDGER VERSION" value={String(portfolio?.version ?? 0)} /></div>
+    <div className="metric-grid"><Metric label="CASH + COST BASIS" value={formatCents(cashAndCostBasisCents)} /><Metric label="AVAILABLE CASH" value={formatCents(portfolio?.cashCents ?? 0)} /><Metric label="OPEN POSITIONS" value={String(portfolio?.positions.length ?? 0)} /><Metric label="LEDGER VERSION" value={String(portfolio?.version ?? 0)} /></div>
     <section className="panel table-panel"><div className="panel-head"><div><p className="eyebrow">SERVER-AUTHORITATIVE POSITIONS</p><h2>Holdings</h2></div></div>
-      <table><thead><tr><th>SYMBOL</th><th>QUANTITY</th><th>AVG COST</th><th>VERSION</th></tr></thead><tbody>{portfolio?.positions.length ? portfolio.positions.map(position => <tr key={position.symbol}><td><strong>{position.symbol}</strong></td><td>{position.quantity}</td><td>${(position.averageCostCents / 100).toFixed(2)}</td><td>v{position.version}</td></tr>) : <tr><td colSpan={4} className="empty-row">No positions. Submit a paper order from the Market view.</td></tr>}</tbody></table>
+      <table><thead><tr><th>SYMBOL</th><th>QUANTITY</th><th>AVG COST</th><th>VERSION</th></tr></thead><tbody>{portfolio?.positions.length ? portfolio.positions.map(position => <tr key={position.symbol}><td><strong>{position.symbol}</strong></td><td>{position.quantity}</td><td>{formatCents(position.averageCostCents)}</td><td>v{position.version}</td></tr>) : <tr><td colSpan={4} className="empty-row">No positions. Submit a paper order from the Market view.</td></tr>}</tbody></table>
     </section></>;
 }
 
 function OrdersView({ orders, onRefresh }: { orders: Order[]; onRefresh: () => void }) {
   return <><PageHeading eyebrow="EXECUTION PIPELINE" title="Orders" action={onRefresh} />
-    <section className="panel table-panel"><table><thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QUANTITY</th><th>STATUS</th><th>FILL</th></tr></thead><tbody>{orders.length ? orders.map(order => <tr key={order.id}><td>{formatTime(order.requestedAt)}</td><td><strong>{order.symbol}</strong></td><td className={order.side === "BUY" ? "positive" : "negative"}>{order.side}</td><td>{order.quantity}</td><td><span className={`order-status ${order.status.toLowerCase()}`}>{order.status}</span>{order.rejectionReason && <small>{order.rejectionReason}</small>}</td><td>{order.filledPriceCents ? `$${(order.filledPriceCents / 100).toFixed(2)}` : "—"}</td></tr>) : <tr><td colSpan={6} className="empty-row">No orders have been submitted.</td></tr>}</tbody></table></section></>;
+    <p className="pipeline-note">Lifecycle: PENDING → PROCESSING → FILLED or REJECTED · Each order has a unique account-scoped idempotency key.</p>
+    <section className="panel table-panel"><table><thead><tr><th>ORDER / TIME</th><th>SYMBOL</th><th>SIDE</th><th>QUANTITY</th><th>STATUS</th><th>FILL</th></tr></thead><tbody>{orders.length ? orders.map(order => <tr key={order.id}><td><strong>{order.id.slice(0, 8)}</strong><small>{formatTime(order.requestedAt)}</small></td><td><strong>{order.symbol}</strong></td><td className={order.side === "BUY" ? "positive" : "negative"}>{order.side}</td><td>{order.quantity}</td><td><span className={`order-status ${order.status.toLowerCase()}`}>{order.status}</span>{order.rejectionReason && <small>{order.rejectionReason}</small>}</td><td>{order.filledPriceCents ? formatCents(order.filledPriceCents) : "—"}</td></tr>) : <tr><td colSpan={6} className="empty-row">No orders have been submitted.</td></tr>}</tbody></table></section></>;
 }
 
 function SystemView({ health, market }: { health: { status: string; environment: string; timestamp: string } | null; market: MarketSnapshot | null }) {
   return <><PageHeading eyebrow="OPERATIONS" title="System health" />
     <div className="metric-grid"><Metric label="API" value={health?.status.toUpperCase() ?? "CHECKING"} good={health?.status === "ok"} /><Metric label="ENVIRONMENT" value={health?.environment.toUpperCase() ?? "—"} /><Metric label="MARKET PROVIDER" value={market ? "CONNECTED" : "UNAVAILABLE"} good={Boolean(market)} /><Metric label="DATA FRESHNESS" value={market?.freshness ?? "—"} good={market?.freshness === "LIVE"} /></div>
-    <section className="panel system-copy"><p className="eyebrow">TRUST BOUNDARIES</p><h2>What this demo guarantees</h2><ul><li>No random-price or synthetic-market fallback.</li><li>Prices, balances, holdings, and identity are validated by the server.</li><li>Every order carries an idempotency key and enters an asynchronous queue.</li><li>Failures remain visible instead of being presented as successful trades.</li></ul></section></>;
+    <section className="panel system-copy"><p className="eyebrow">DATA PROVENANCE</p><h2>{market?.provider.toUpperCase() ?? "Provider unavailable"}</h2><ul><li>Feed: {market?.feed.toUpperCase() ?? "unavailable"}; quote freshness: {market?.freshness ?? "unavailable"}.</li><li>Quote source time: {market ? formatTime(market.asOf) : "unavailable"}.</li><li>Received by API: {market ? formatTime(market.receivedAt) : "unavailable"}.</li><li>Provider failure shows an error; no synthetic replacement prices.</li></ul></section>
+    <section className="panel system-copy"><p className="eyebrow">ARCHITECTURE · CONFIGURED, NOT LIVE QUEUE TELEMETRY</p><h2>Order safety</h2><ul><li>Cloudflare Worker → D1 order record → Queue → serialized consumer → D1 ledger.</li><li>States: PENDING → PROCESSING → FILLED or REJECTED; failed attempts retry with a dead-letter queue.</li><li>Account-scoped idempotency key and one trade per order prevent duplicate fills.</li><li>Server selects price and owns cash, positions, and anonymous demo-session identity.</li><li>API requests are rate limited. Cash and positions use integer cents and database constraints.</li></ul></section></>;
 }
 
 function PageHeading({ eyebrow, title, action }: { eyebrow: string; title: string; action?: () => void }) {
@@ -224,6 +227,10 @@ function Metric({ label, value, good }: { label: string; value: string; good?: b
 
 function formatTime(value: string) {
   return new Date(value).toLocaleString(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatCents(cents: number) {
+  return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatError(error: unknown) {

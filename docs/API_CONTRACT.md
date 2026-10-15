@@ -69,6 +69,7 @@ Only positive whole-share quantities are accepted. Price, balance, account ID, s
 
 - `202`: a new order was persisted and queued.
 - `200`: the same idempotency key returned its existing order with `replayed: true`.
+- `409`: an existing idempotency key was reused with different order details.
 - `400`: validation failed.
 - `401`: session missing or expired.
 - `415`: body is not JSON.
@@ -77,6 +78,8 @@ Only positive whole-share quantities are accepted. Price, balance, account ID, s
 ### `GET /api/orders`
 
 Returns up to 100 orders for the authenticated demo account. Internal account IDs and idempotency keys are not included.
+
+Order states are `PENDING`, `PROCESSING`, `FILLED`, and `REJECTED`; there is no separate `QUEUED` or `FAILED` state.
 
 ## Health
 

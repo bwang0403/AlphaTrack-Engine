@@ -26,10 +26,12 @@ describe("request validation", () => {
     });
   });
 
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "2", 100001])("rejects malformed quantity %s", quantity => {
-    expect(() => parseOrder({ symbol: "NVDA", side: "BUY", quantity, idempotencyKey: "order_1234567890abcdef" })).toThrowError(
-      "quantity must be a positive whole number"
-    );
+  it("rejects malformed quantities across numeric and type boundaries", () => {
+    for (const quantity of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "2", 100001]) {
+      expect(() => parseOrder({ symbol: "NVDA", side: "BUY", quantity, idempotencyKey: "order_1234567890abcdef" })).toThrowError(
+        "quantity must be a positive whole number"
+      );
+    }
   });
 
   it("rejects client fields that cannot form a valid order boundary", () => {
