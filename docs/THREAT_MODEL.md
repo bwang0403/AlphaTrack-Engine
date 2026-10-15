@@ -18,7 +18,7 @@ The browser is untrusted. Symbols, sides, quantities, idempotency keys, cookies,
 | --- | --- |
 | Client changes a balance or holding | No balance, position, account ID, or execution-price fields exist in the write contract |
 | Session enumeration | 256-bit random token; only its SHA-256 hash plus a secret pepper is stored and bound to `user_id` |
-| Passcode theft or brute force | Salted, peppered PBKDF2-SHA-256 at 210,000 iterations; fixed-window registration and login rate limits |
+| Passcode theft or brute force | Salted, peppered PBKDF2-SHA-256 at 100,000 iterations; fixed-window registration and login rate limits |
 | Cross-site session use | SameSite=Strict cookie; same-origin API; production Secure cookie |
 | Duplicate click or network replay | Unique `(account_id, idempotency_key)` database constraint |
 | Queue at-least-once replay | Conditional `PENDING → PROCESSING` claim, unique trade per order, and transaction mutations guarded by the newly inserted trade ID |

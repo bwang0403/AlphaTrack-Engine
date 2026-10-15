@@ -3,7 +3,8 @@ import type { Env } from "./types";
 
 const COOKIE_NAME = "alphatrack_session";
 const SESSION_SECONDS = 7 * 24 * 60 * 60;
-const PASSWORD_ITERATIONS = 210_000;
+// Cloudflare Workers WebCrypto rejects a single PBKDF2 derivation above 100,000 iterations.
+const PASSWORD_ITERATIONS = 100_000;
 
 export interface Session {
   userId: string;
