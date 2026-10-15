@@ -17,6 +17,7 @@ function setup() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   for (const fixture of opened.splice(0)) fixture.sqlite.close();
 });
 
@@ -75,8 +76,10 @@ describe("D1 and Queue order pipeline", () => {
       new Request(`https://example.com${path}`, init) as Parameters<NonNullable<typeof worker.fetch>>[0], env, {} as ExecutionContext
     );
     const credentials = { username: "alice_test", passcode: "strong-passcode-123" };
+    const deriveBits = vi.spyOn(crypto.subtle, "deriveBits");
     const register = await route("/api/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials) });
     expect(register.status).toBe(201);
+    expect(deriveBits).toHaveBeenCalledWith(expect.objectContaining({ name: "PBKDF2", iterations: 100_000, hash: "SHA-256" }), expect.anything(), 256);
     const registered = await register.json() as { user: { id: string; kind: string } };
     expect(registered.user.kind).toBe("registered");
     const cookie = register.headers.get("set-cookie")!;
