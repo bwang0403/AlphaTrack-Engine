@@ -63,10 +63,24 @@ export async function submitOrder(
 }
 
 export async function listOrders(env: Env, accountId: string): Promise<PublicOrder[]> {
-  const result = await env.DB.prepare(
-    `${ORDER_SELECT} WHERE account_id = ? ORDER BY requested_at DESC LIMIT 100`
-  ).bind(accountId).all<OrderRow>();
-  return result.results.map(toPublicOrder);
+  return (await listOrdersPage(env, accountId)).orders;
+}
+
+export async function listOrdersPage(env: Env, accountId: string, cursor: string | null = null): Promise<{ orders: PublicOrder[]; nextCursor: string | null }> {
+  let result: D1Result<OrderRow>;
+  if (cursor !== null) {
+    const anchor = await findOrder(env, cursor, accountId);
+    if (!anchor) throw new ApiError(400, "INVALID_ORDER_CURSOR", "Order cursor is invalid");
+    result = await env.DB.prepare(
+      `${ORDER_SELECT} WHERE account_id = ? AND (requested_at < ? OR (requested_at = ? AND id < ?)) ORDER BY requested_at DESC, id DESC LIMIT 101`
+    ).bind(accountId, anchor.requestedAt, anchor.requestedAt, anchor.id).all<OrderRow>();
+  } else {
+    result = await env.DB.prepare(
+      `${ORDER_SELECT} WHERE account_id = ? ORDER BY requested_at DESC, id DESC LIMIT 101`
+    ).bind(accountId).all<OrderRow>();
+  }
+  const page = result.results.slice(0, 100);
+  return { orders: page.map(toPublicOrder), nextCursor: result.results.length > 100 ? page[page.length - 1].id : null };
 }
 
 export async function getOrder(env: Env, accountId: string, orderId: string): Promise<PublicOrder> {

@@ -21,6 +21,11 @@ function cents(value: number) { return `$${(value / 100).toLocaleString(undefine
 function time(value: string) { return new Date(value).toLocaleString(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }); }
 function errorText(error: unknown) { return error instanceof ApiClientError ? `${error.message}${error.requestId ? ` · Request ${error.requestId}` : ""}` : error instanceof Error ? error.message : "Unexpected request failure"; }
 function statusClass(status: Order["status"]) { return `order-status ${status.toLowerCase()}`; }
+function mergeOrders(incoming: Order[], current: Order[]): Order[] {
+  const byId = new Map(current.map(order => [order.id, order]));
+  incoming.forEach(order => byId.set(order.id, order));
+  return [...byId.values()].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt) || b.id.localeCompare(a.id));
+}
 
 export default function App() {
   const [view, setView] = useState<View>(viewFromHash);
@@ -30,6 +35,8 @@ export default function App() {
   const [market, setMarket] = useState<MarketSnapshot | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersCursor, setOrdersCursor] = useState<string | null | undefined>();
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [quotes, setQuotes] = useState<Record<string, MarketSnapshot>>({});
   const [health, setHealth] = useState<{ status: string; environment: string; timestamp: string } | null>(null);
   const [system, setSystem] = useState<SystemStatus | null>(null);
@@ -68,7 +75,9 @@ export default function App() {
   const refreshAccount = useCallback(async () => {
     try {
       const [nextPortfolio, nextOrders] = await Promise.all([api.portfolio(), api.orders()]);
-      setPortfolio(nextPortfolio); setOrders(nextOrders.orders);
+      setPortfolio(nextPortfolio);
+      setOrders(current => mergeOrders(nextOrders.orders, current));
+      setOrdersCursor(current => current === undefined ? nextOrders.nextCursor : current);
     } catch (cause) { setError(errorText(cause)); }
   }, []);
   const refreshSystem = useCallback(async () => {
@@ -87,7 +96,7 @@ export default function App() {
     let ticks = 0;
     const timer = window.setInterval(() => {
       ticks += 1;
-      api.orders().then(result => setOrders(result.orders)).catch(cause => setError(errorText(cause)));
+      api.orders().then(result => setOrders(current => mergeOrders(result.orders, current))).catch(cause => setError(errorText(cause)));
       if (ticks % 3 === 0) void refreshAccount();
     }, 10_000);
     return () => window.clearInterval(timer);
@@ -126,7 +135,7 @@ export default function App() {
     catch (cause) { setError(errorText(cause)); }
   }
   async function signOut() {
-    try { await api.logout(); setAuth(null); setPortfolio(null); setOrders([]); setQuotes({}); setSystem(null); }
+    try { await api.logout(); setAuth(null); setPortfolio(null); setOrders([]); setOrdersCursor(undefined); setQuotes({}); setSystem(null); }
     catch (cause) { setError(errorText(cause)); }
   }
   function chooseSymbol(next: string) { setSearch(next); if (next !== symbol) setDraftKey(crypto.randomUUID()); setSymbol(next); navigate("terminal"); }
@@ -145,7 +154,7 @@ export default function App() {
     for (let attempt = 0; attempt < 12; attempt++) {
       await new Promise(resolve => window.setTimeout(resolve, 500));
       const result = await api.orders();
-      setOrders(result.orders);
+      setOrders(current => mergeOrders(result.orders, current));
       const found = result.orders.find(item => item.id === id);
       if (found?.status === "FILLED" || found?.status === "REJECTED") return found;
     }
@@ -169,6 +178,16 @@ export default function App() {
   }
   function placeOrder(event: FormEvent) { event.preventDefault(); void sendOrder({ symbol, side, quantity, idempotencyKey: draftKey }); }
   function replayOrder(item: Order) { void sendOrder(item, true); }
+  async function loadOlderOrders() {
+    if (!ordersCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const result = await api.orders(ordersCursor);
+      setOrders(current => mergeOrders(result.orders, current));
+      setOrdersCursor(result.nextCursor);
+    } catch (cause) { setError(errorText(cause)); }
+    finally { setLoadingOlder(false); }
+  }
   const lastReplay = orders[0];
   const position = portfolio?.positions.find(item => item.symbol === symbol);
 
@@ -188,7 +207,7 @@ export default function App() {
           <div className="terminal-grid"><section className="panel chart-panel"><div className="panel-head"><div><p className="eyebrow">MARKET / VERIFIED OHLCV</p><h2>{symbol} <span className="muted">PRICE & VOLUME</span></h2></div><div className="periods">{PERIODS.map(item => <button key={item} className={period === item ? "active" : ""} onClick={() => setPeriod(item)}>{item}</button>)}</div></div>{loading ? <div className="loading">CONTACTING MARKET DATA PROVIDER…</div> : market ? <PriceChart bars={market.bars}/> : <div className="empty-chart">Market feed unavailable · no synthetic fallback</div>}<div className="data-foot"><span>SOURCE: {market ? "ALPACA IEX" : "DISCONNECTED"}</span><span>FINITE OHLCV {market ? "VERIFIED" : "UNAVAILABLE"}</span><span>{market?.bars.length ?? 0} BARS</span><span>{market ? `${market.freshness} · AS OF ${time(market.asOf)}` : "OUTAGE"}</span></div></section>
             <form className="panel order-ticket" onSubmit={placeOrder}><div className="panel-head"><div><p className="eyebrow">PAPER ORDER</p><h2>Trade {symbol}</h2></div><span className="paper-tag">SIMULATED</span></div><div className="segmented"><button type="button" className={side === "BUY" ? "buy active" : ""} onClick={() => editOrder({ side: "BUY" })}>BUY</button><button type="button" className={side === "SELL" ? "sell active" : ""} onClick={() => editOrder({ side: "SELL" })}>SELL</button></div><div className="ticket-fields"><label>ORDER TYPE<input value="MARKET" disabled/></label><label>WHOLE SHARES<input type="number" min="1" max="100000" step="1" value={quantity} onChange={event => editOrder({ quantity: Number(event.target.value) })}/></label></div><div className="ticket-summary"><div><span>Estimated order value</span><strong>{market && Number.isInteger(quantity) && quantity > 0 ? cents(Math.round(market.price * 100) * quantity) : "—"}</strong></div><div><span>Raw estimated cents</span><strong>{market && Number.isInteger(quantity) && quantity > 0 ? (Math.round(market.price * 100) * quantity).toLocaleString() : "—"}</strong></div><div><span>Available cash</span><strong>{portfolio ? cents(portfolio.cashCents) : "—"}</strong></div><div><span>Current position</span><strong>{position?.quantity ?? 0} shares</strong></div></div><button className={`submit-order ${side.toLowerCase()}`} disabled={!market || submitting || !Number.isInteger(quantity) || quantity < 1}>{submitting ? "PROCESSING…" : `SUBMIT ${side} ORDER →`}</button><div className="key-preview"><span>IDEMPOTENCY KEY · NEXT ORDER</span><code>{draftKey}</code><small>Same key returns the original server order on replay.</small></div>{orderMessage && <p className="success-message">{orderMessage}</p>}</form></div>
           <section className="panel bottom-dock"><div className="dock-bar"><div className="dock-tabs"><button className={dock === "orders" ? "active" : ""} onClick={() => setDock("orders")}>RECENT ORDERS <span>{orders.length}</span></button><button className={dock === "positions" ? "active" : ""} onClick={() => setDock("positions")}>CURRENT POSITIONS <span>{portfolio?.positions.length ?? 0}</span></button></div><button className="ghost-button" disabled={!lastReplay || submitting} onClick={() => lastReplay && replayOrder(lastReplay)}>↻ REPLAY LAST ORDER KEY</button></div><div className="dock-content">{dock === "orders" ? <OrderTable orders={orders.slice(0, 5)} onReplay={replayOrder} submitting={submitting} compact/> : <HoldingsTable portfolio={portfolio} quotes={quotes} compact/>}</div></section>
-        </> : view === "portfolio" ? <><PageHeading eyebrow="SERVER-AUTHORITATIVE ACCOUNT" title="Portfolio & Ledger" onRefresh={refreshAccount}/><div className="page-metrics"><Metric label="TOTAL EQUITY" value={valuation?.equityCents === null || !valuation ? "—" : cents(valuation.equityCents)}/><Metric label="AVAILABLE CASH" value={portfolio ? cents(portfolio.cashCents) : "—"}/><Metric label="UNREALIZED P&L" value={valuation?.unrealizedCents === null || !valuation ? "—" : cents(valuation.unrealizedCents)} tone={valuation?.unrealizedCents ?? 0}/><Metric label="REALIZED P&L" value={portfolio ? cents(portfolio.realizedPnlCents) : "—"} note="filled sells · average cost · integer cents" tone={portfolio?.realizedPnlCents ?? 0}/></div><div className="portfolio-grid"><section className="panel allocation-panel"><p className="eyebrow">PORTFOLIO ALLOCATION</p><h2>Cash vs. holdings</h2>{valuation?.holdingsCents !== null && valuation ? <><div className="allocation-track"><span style={{ width: `${Math.max(0, Math.min(100, portfolio!.cashCents / Math.max(1, valuation.equityCents!) * 100))}%` }}/></div><div className="allocation-key"><span><i className="cash-key"/> Cash {cents(portfolio!.cashCents)}</span><span><i className="holdings-key"/> Holdings {cents(valuation.holdingsCents)}</span></div></> : <p className="muted">Awaiting verified IEX quotes to mark holdings to market.</p>}<p className="muted">Valuations use the latest available IEX quote. Orders settle against server-selected prices.</p></section><section className="panel ledger-panel"><p className="eyebrow">INTEGER-CENT LEDGER INSPECTOR</p><h2>Authoritative cash balance</h2><div className="ledger-value">{portfolio?.cashCents.toLocaleString() ?? "—"}<small>cash_cents</small></div><div className="ledger-usd">{portfolio ? cents(portfolio.cashCents) : "—"} formatted USD</div><div className="constraint-list"><span>CHECK (cash_cents &gt;= 0)</span><span>CHECK (shares &gt;= 0)</span><span>LEDGER VERSION v{portfolio?.version ?? "—"}</span></div></section></div><section className="panel table-panel"><div className="panel-head"><div><p className="eyebrow">SERVER-AUTHORITATIVE POSITIONS</p><h2>Holdings</h2></div></div><HoldingsTable portfolio={portfolio} quotes={quotes}/></section></> : view === "orders" ? <><PageHeading eyebrow="ASYNCHRONOUS EXECUTION" title="Orders & Idempotency" onRefresh={refreshAccount}/><div className="lifecycle"><span>PENDING</span><b>→</b><span>PROCESSING</span><b>→</b><span>FILLED / REJECTED</span><small>Queue and DLQ depth are separate telemetry, not order statuses.</small></div><section className="panel table-panel"><div className="panel-head"><div><p className="eyebrow">ACCOUNT-SCOPED ORDER LOG</p><h2>Execution history</h2></div><span className="muted">AUTO REFRESH / 10 SEC</span></div><OrderTable orders={orders} onReplay={replayOrder} submitting={submitting}/></section><p className="page-footnote">Every idempotency key is loaded from the authenticated user's D1 order history. Replay submits the original symbol, side, and quantity with the same key; the server returns the original order without another fill.</p></> : <SystemView health={health} system={system} market={market} onRefresh={refreshSystem}/>}
+        </> : view === "portfolio" ? <><PageHeading eyebrow="SERVER-AUTHORITATIVE ACCOUNT" title="Portfolio & Ledger" onRefresh={refreshAccount}/><div className="page-metrics"><Metric label="TOTAL EQUITY" value={valuation?.equityCents === null || !valuation ? "—" : cents(valuation.equityCents)}/><Metric label="AVAILABLE CASH" value={portfolio ? cents(portfolio.cashCents) : "—"}/><Metric label="UNREALIZED P&L" value={valuation?.unrealizedCents === null || !valuation ? "—" : cents(valuation.unrealizedCents)} tone={valuation?.unrealizedCents ?? 0}/><Metric label="REALIZED P&L" value={portfolio ? cents(portfolio.realizedPnlCents) : "—"} note="filled sells · average cost · integer cents" tone={portfolio?.realizedPnlCents ?? 0}/></div><div className="portfolio-grid"><section className="panel allocation-panel"><p className="eyebrow">PORTFOLIO ALLOCATION</p><h2>Cash vs. holdings</h2>{valuation?.holdingsCents !== null && valuation ? <><div className="allocation-track"><span style={{ width: `${Math.max(0, Math.min(100, portfolio!.cashCents / Math.max(1, valuation.equityCents!) * 100))}%` }}/></div><div className="allocation-key"><span><i className="cash-key"/> Cash {cents(portfolio!.cashCents)}</span><span><i className="holdings-key"/> Holdings {cents(valuation.holdingsCents)}</span></div></> : <p className="muted">Awaiting verified IEX quotes to mark holdings to market.</p>}<p className="muted">Valuations use the latest available IEX quote. Orders settle against server-selected prices.</p></section><section className="panel ledger-panel"><p className="eyebrow">INTEGER-CENT LEDGER INSPECTOR</p><h2>Authoritative cash balance</h2><div className="ledger-value">{portfolio?.cashCents.toLocaleString() ?? "—"}<small>cash_cents</small></div><div className="ledger-usd">{portfolio ? cents(portfolio.cashCents) : "—"} formatted USD</div><div className="constraint-list"><span>CHECK (cash_cents &gt;= 0)</span><span>CHECK (shares &gt;= 0)</span><span>LEDGER VERSION v{portfolio?.version ?? "—"}</span></div></section></div><section className="panel table-panel"><div className="panel-head"><div><p className="eyebrow">SERVER-AUTHORITATIVE POSITIONS</p><h2>Holdings</h2></div></div><HoldingsTable portfolio={portfolio} quotes={quotes}/></section></> : view === "orders" ? <><PageHeading eyebrow="ASYNCHRONOUS EXECUTION" title="Orders & Idempotency" onRefresh={refreshAccount}/><div className="lifecycle"><span>PENDING</span><b>→</b><span>PROCESSING</span><b>→</b><span>FILLED / REJECTED</span><small>Queue and DLQ depth are separate telemetry, not order statuses.</small></div><section className="panel table-panel"><div className="panel-head"><div><p className="eyebrow">ACCOUNT-SCOPED ORDER LOG</p><h2>Execution history</h2></div><span className="muted">AUTO REFRESH / 10 SEC</span></div><OrderTable orders={orders} onReplay={replayOrder} submitting={submitting}/>{ordersCursor && <div className="orders-pagination"><button className="ghost-button" disabled={loadingOlder} onClick={() => void loadOlderOrders()}>{loadingOlder ? "LOADING…" : "LOAD OLDER ORDERS →"}</button></div>}</section><p className="page-footnote">Every idempotency key is loaded from the authenticated user's D1 order history. Replay submits the original symbol, side, and quantity with the same key; the server returns the original order without another fill.</p></> : <SystemView health={health} system={system} market={market} onRefresh={refreshSystem}/>}
       </main></div>
   </div>;
 }

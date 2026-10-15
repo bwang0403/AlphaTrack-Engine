@@ -13,6 +13,8 @@ describe("browser API client", () => {
     vi.stubGlobal("fetch", fetcher);
     await api.market("BRK.B", "1mo");
     expect(fetcher).toHaveBeenCalledWith("/api/market/BRK.B?period=1mo", { credentials: "same-origin" });
+    await api.orders("older/order");
+    expect(fetcher).toHaveBeenCalledWith("/api/orders?cursor=older%2Forder", { credentials: "same-origin" });
   });
 
   it("sends only trusted paper-order inputs", async () => {

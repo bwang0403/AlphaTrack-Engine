@@ -81,7 +81,7 @@ Only positive whole-share quantities are accepted. Price, balance, account ID, s
 
 ### `GET /api/orders`
 
-Returns up to 100 orders for the authenticated user. Each order includes its original `idempotencyKey` so the owner can replay the same symbol, side, and quantity. Internal account IDs are not returned.
+Returns up to 100 orders per page for the authenticated user. Each order includes its original `idempotencyKey` so the owner can replay the same symbol, side, and quantity. The response also contains `nextCursor` (an order ID or `null`); pass a non-null cursor as `GET /api/orders?cursor=...` to load older orders. The cursor must belong to the authenticated user. Internal account IDs are not returned.
 
 ### `GET /api/orders/:id`
 

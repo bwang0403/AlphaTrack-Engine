@@ -69,7 +69,7 @@ describe("D1 and Queue order pipeline", () => {
     const orders = await route("/api/orders", { headers: { cookie } });
     const orderHistory = (await orders.json() as { orders: Array<{ status: string; idempotencyKey: string }> }).orders;
     expect(orderHistory.map(order => order.status)).toEqual(["FILLED", "FILLED"]);
-    expect(orderHistory.map(order => order.idempotencyKey)).toEqual(["sell-order-key-0001", "buy-order-key-0001"]);
+    expect(orderHistory.map(order => order.idempotencyKey).sort()).toEqual(["buy-order-key-0001", "sell-order-key-0001"]);
     const single = await route(`/api/orders/${buyBody.order.id}`, { headers: { cookie } });
     expect(await single.json()).toMatchObject({ order: { id: buyBody.order.id, idempotencyKey: "buy-order-key-0001" } });
     const filledReplay = await submit("SELL", "sell-order-key-0001");
@@ -122,11 +122,27 @@ describe("D1 and Queue order pipeline", () => {
       body: JSON.stringify({ symbol: "NVDA", side: "BUY", quantity: 1, idempotencyKey: "registered-user-key-01" })
     });
     expect(registeredOrder.status).toBe(202);
+    const insertHistorical = sqlite.prepare(
+      "INSERT INTO orders (id, account_id, idempotency_key, symbol, side, quantity, status, requested_at, updated_at) VALUES (?, ?, ?, 'NVDA', 'BUY', 1, 'PENDING', ?, ?)"
+    );
+    for (let index = 0; index < 101; index++) {
+      const stamp = new Date(Date.UTC(2025, 0, 1, 0, 0, index)).toISOString();
+      insertHistorical.run(`historic-${index}`, registered.user.id, `historic-order-key-${index}`, stamp, stamp);
+    }
+    const firstPage = await (await route("/api/orders", { headers: { cookie: loginCookie } })).json() as { orders: Array<{ id: string; idempotencyKey: string }>; nextCursor: string | null };
+    expect(firstPage.orders).toHaveLength(100);
+    expect(firstPage.nextCursor).toBeTruthy();
+    const secondPage = await (await route(`/api/orders?cursor=${firstPage.nextCursor}`, { headers: { cookie: loginCookie } })).json() as typeof firstPage;
+    expect(secondPage.orders).toHaveLength(2);
+    expect(secondPage.nextCursor).toBeNull();
+    expect(new Set([...firstPage.orders, ...secondPage.orders].map(order => order.id)).size).toBe(102);
+    expect(secondPage.orders.every(order => order.idempotencyKey.length > 0)).toBe(true);
     const another = await route("/api/auth/demo", { method: "POST" });
     const anotherCookie = another.headers.get("set-cookie")!;
     expect((await route("/api/system", { headers: { cookie: anotherCookie } })).status).toBe(200);
     expect((await requireSession(new Request("https://example.com", { headers: { cookie: anotherCookie } }), env)).userId).not.toBe(registered.user.id);
-    expect(await (await route("/api/orders", { headers: { cookie: anotherCookie } })).json()).toEqual({ orders: [] });
+    expect(await (await route("/api/orders", { headers: { cookie: anotherCookie } })).json()).toEqual({ orders: [], nextCursor: null });
+    expect((await route(`/api/orders?cursor=${firstPage.nextCursor}`, { headers: { cookie: anotherCookie } })).status).toBe(400);
     expect((await route(`/api/orders/${(await registeredOrder.json() as { order: { id: string } }).order.id}`, { headers: { cookie: anotherCookie } })).status).toBe(404);
     expect(await (await route("/api/portfolio", { headers: { cookie: anotherCookie } })).json()).toMatchObject({ realizedPnlCents: 0 });
   });

@@ -102,7 +102,7 @@ export const api = {
   logout: () => request<{ signedOut: boolean }>("/api/auth/logout", { method: "POST" }),
   market: (symbol: string, period: string) => request<MarketSnapshot>(`/api/market/${encodeURIComponent(symbol)}?period=${encodeURIComponent(period)}`),
   portfolio: () => request<Portfolio>("/api/portfolio"),
-  orders: () => request<{ orders: Order[] }>("/api/orders"),
+  orders: (cursor?: string) => request<{ orders: Order[]; nextCursor: string | null }>(`/api/orders${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
   order: (id: string) => request<{ order: Order }>(`/api/orders/${encodeURIComponent(id)}`),
   health: () => request<{ status: string; environment: string; timestamp: string }>("/api/health"),
   system: () => request<SystemStatus>("/api/system"),

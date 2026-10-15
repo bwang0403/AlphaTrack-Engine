@@ -241,3 +241,4 @@ main,main.terminal-main{display:block;overflow:visible;padding:17px 13px 75px}
 .sidebar .nav-label{display:inline;font-size:8px}
 .sidebar .nav-icon{font-size:16px}
 }
+.orders-pagination{display:flex;justify-content:center;padding:18px 0 2px}
