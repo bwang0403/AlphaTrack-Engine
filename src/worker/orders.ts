@@ -17,7 +17,14 @@ interface OrderRow {
   rejectionReason: string | null;
 }
 
-type PublicOrder = Omit<OrderRow, "accountId" | "idempotencyKey">;
+type PublicOrder = Omit<OrderRow, "accountId">;
+
+interface TradeRow {
+  symbol: string;
+  side: OrderSide;
+  quantity: number;
+  priceCents: number;
+}
 
 interface AccountRow {
   id: string;
@@ -62,6 +69,12 @@ export async function listOrders(env: Env, accountId: string): Promise<PublicOrd
   return result.results.map(toPublicOrder);
 }
 
+export async function getOrder(env: Env, accountId: string, orderId: string): Promise<PublicOrder> {
+  const order = await findOrder(env, orderId, accountId);
+  if (!order) throw new ApiError(404, "ORDER_NOT_FOUND", "Order was not found");
+  return toPublicOrder(order);
+}
+
 export async function recoverStalledOrders(env: Env, now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
   const stale = await env.DB.prepare(
@@ -82,6 +95,7 @@ export async function recoverStalledOrders(env: Env, now = new Date()): Promise<
 export async function getPortfolio(env: Env, accountId: string): Promise<{
   cashCents: number;
   version: number;
+  realizedPnlCents: number;
   positions: PositionRow[];
 }> {
   const account = await env.DB.prepare(
@@ -92,7 +106,38 @@ export async function getPortfolio(env: Env, accountId: string): Promise<{
     `SELECT symbol, quantity, average_cost_cents AS averageCostCents, version
      FROM positions WHERE account_id = ? AND quantity > 0 ORDER BY symbol`
   ).bind(accountId).all<PositionRow>();
-  return { cashCents: account.cashCents, version: account.version, positions: positions.results };
+  // Row insertion order is the ledger's fill order, including fills sharing a timestamp.
+  const trades = await env.DB.prepare(
+    "SELECT symbol, side, quantity, price_cents AS priceCents FROM trades WHERE account_id = ? ORDER BY rowid ASC"
+  ).bind(accountId).all<TradeRow>();
+  return {
+    cashCents: account.cashCents,
+    version: account.version,
+    realizedPnlCents: calculateRealizedPnlCents(trades.results),
+    positions: positions.results
+  };
+}
+
+function calculateRealizedPnlCents(trades: TradeRow[]): number {
+  const holdings = new Map<string, { quantity: number; averageCostCents: number }>();
+  let realized = 0;
+  for (const trade of trades) {
+    const held = holdings.get(trade.symbol) ?? { quantity: 0, averageCostCents: 0 };
+    const amount = trade.priceCents * trade.quantity;
+    if (!Number.isSafeInteger(amount) || amount <= 0) throw new ApiError(500, "LEDGER_VALUE_INVALID", "A ledger value is outside the supported range");
+    if (trade.side === "BUY") {
+      const quantity = held.quantity + trade.quantity;
+      const weightedCost = held.averageCostCents * held.quantity + amount;
+      if (!Number.isSafeInteger(quantity) || !Number.isSafeInteger(weightedCost)) throw new ApiError(500, "LEDGER_VALUE_INVALID", "A ledger value is outside the supported range");
+      holdings.set(trade.symbol, { quantity, averageCostCents: Math.round(weightedCost / quantity) });
+    } else {
+      if (held.quantity < trade.quantity) throw new ApiError(500, "LEDGER_HISTORY_INVALID", "Ledger fill history is inconsistent");
+      realized += (trade.priceCents - held.averageCostCents) * trade.quantity;
+      if (!Number.isSafeInteger(realized)) throw new ApiError(500, "LEDGER_VALUE_INVALID", "A ledger value is outside the supported range");
+      holdings.set(trade.symbol, { ...held, quantity: held.quantity - trade.quantity });
+    }
+  }
+  return realized;
 }
 
 export async function executeOrder(env: Env, command: OrderCommand): Promise<void> {
@@ -198,6 +243,6 @@ function insertTradeStatement(env: Env, tradeId: string, order: OrderRow, priceC
 }
 
 function toPublicOrder(order: OrderRow): PublicOrder {
-  const { accountId: _accountId, idempotencyKey: _idempotencyKey, ...safe } = order;
+  const { accountId: _accountId, ...safe } = order;
   return safe;
 }

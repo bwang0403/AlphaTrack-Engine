@@ -82,6 +82,12 @@ try {
   assert.equal(workstation.route, "#/terminal");
   await evaluate("document.querySelector('.chart-modes button:last-child').click()");
   assert.ok(await evaluate("document.querySelector('svg[aria-label*=" + JSON.stringify("Candlestick") + "]') !== null"));
+  await evaluate("Array.from(document.querySelectorAll('nav button')).find(button => button.innerText.includes('Portfolio')).click()");
+  await until(async () => await evaluate("location.hash === '#/portfolio' && document.body.innerText.includes('REALIZED P&L')"));
+  await until(async () => await evaluate("document.querySelector('main').innerText.includes('$0.00')"));
+  await evaluate("Array.from(document.querySelectorAll('nav button')).find(button => button.innerText.includes('Orders')).click()");
+  await until(async () => await evaluate("location.hash === '#/orders' && document.body.innerText.includes('IDEMPOTENCY KEY')"));
+  assert.ok(await evaluate("!document.querySelector('main').innerText.includes('NOT RETURNED BY API')"));
   await evaluate("Array.from(document.querySelectorAll('nav button')).find(button => button.innerText.includes('System')).click()");
   await until(async () => await evaluate("document.body?.innerText.includes('LIVE D1 ORDER STATES') && document.body?.innerText.includes('AUTHENTICATION AND RATE LIMITS')"));
   const visible = await until(async () => {

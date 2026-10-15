@@ -30,11 +30,13 @@ export interface Position {
 export interface Portfolio {
   cashCents: number;
   version: number;
+  realizedPnlCents: number;
   positions: Position[];
 }
 
 export interface Order {
   id: string;
+  idempotencyKey: string;
   symbol: string;
   side: "BUY" | "SELL";
   quantity: number;
@@ -101,6 +103,7 @@ export const api = {
   market: (symbol: string, period: string) => request<MarketSnapshot>(`/api/market/${encodeURIComponent(symbol)}?period=${encodeURIComponent(period)}`),
   portfolio: () => request<Portfolio>("/api/portfolio"),
   orders: () => request<{ orders: Order[] }>("/api/orders"),
+  order: (id: string) => request<{ order: Order }>(`/api/orders/${encodeURIComponent(id)}`),
   health: () => request<{ status: string; environment: string; timestamp: string }>("/api/health"),
   system: () => request<SystemStatus>("/api/system"),
   submitOrder: (body: { symbol: string; side: "BUY" | "SELL"; quantity: number; idempotencyKey: string }) =>

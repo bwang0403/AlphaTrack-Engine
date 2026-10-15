@@ -52,7 +52,7 @@ Queue concurrency is set to one for this single-ledger demo. The database's uniq
 
 - Only whole-share market orders are supported.
 - Market bars use Alpaca's free IEX feed, not consolidated SIP data.
-- The portfolio screen currently reports cash plus cost basis; live portfolio valuation will be added only when every position has a verified current quote.
+- The portfolio reports server-derived realized P&L from filled trades. Live equity and unrealized P&L are displayed only when every position has a verified current quote; otherwise the UI keeps market valuation pending rather than inventing a price.
 - Username/passcode accounts and one-click demo user sign-in use seven-day sessions; password recovery and third-party identity providers are not implemented.
 - The System view fetches live D1 order counts, session status, rate-limit policies, and market observations. Queue and DLQ depth remain unavailable through the current Worker binding.
 - The legacy Python Lambda remains in the repository during migration and is not used by the v2 Worker.

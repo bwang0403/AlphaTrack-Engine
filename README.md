@@ -28,7 +28,7 @@ Orders use these states: `PENDING → PROCESSING → FILLED` or `REJECTED`. Ther
 
 ## Ledger and authentication
 
-D1 stores cash, average cost, and fill prices as integer cents. Schema `CHECK` constraints prohibit negative account cash or position quantity. Every portfolio and order query is scoped to the authenticated `user_id` obtained from a validated session cookie; the client does not send user IDs, cash, holdings, or execution prices. The account ID is the user's ID, so one user owns one isolated paper ledger.
+D1 stores cash, average cost, and fill prices as integer cents. Schema `CHECK` constraints prohibit negative account cash or position quantity. The portfolio API derives cumulative realized P&L from filled trades in ledger order using the same rounded weighted-average cost basis as position updates; it returns `0` before a sell fills. Every portfolio and order query is scoped to the authenticated `user_id` obtained from a validated session cookie; the client does not send user IDs, cash, holdings, or execution prices. The account ID is the user's ID, so one user owns one isolated paper ledger. The orders API returns each owner's persisted idempotency key for explicit replay without another ledger mutation.
 
 Users may register with a username and passcode, sign in later, or choose **Instant Demo Account Sign-In** for immediate recruiter access. Registered passcodes are salted and peppered with 100,000-iteration PBKDF2-SHA-256 before storage. Each sign-in receives a 32-byte cryptographically random session token in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS). D1 stores only a peppered SHA-256 token hash and binds that session to a `user_id`. Demo users use the same user and session tables, with a fresh isolated paper ledger. Registration, login, demo sign-in, market reads, and order submissions have D1-backed rate limits; client addresses are pepper-hashed before storage.
 
@@ -52,7 +52,7 @@ npm run build
 
 For development, run `npm run dev:api` and `npm run dev` in separate terminals. Vite serves the UI at `http://127.0.0.1:5173` and proxies `/api` to the local Worker. The current deployment and environment bindings are in `wrangler.jsonc`; secrets are configured in Cloudflare and never committed.
 
-The dependency-free `npm run verify:deployment -- http://127.0.0.1:8787 full` script checks the built page, health, demo authentication, System API, Alpaca IEX data, and HTTP-to-queue buy/sell fills with idempotent replay. `npm run verify:browser -- http://127.0.0.1:8787` uses installed headless Chrome to click the demo sign-in and inspect the rendered System view. Both commands also accept the live Worker URL.
+The dependency-free `npm run verify:deployment -- http://127.0.0.1:8787 full` script checks the built page, health, demo authentication, System API, Alpaca IEX data, HTTP-to-queue buy/sell fills, historical order keys, and ledger invariance after idempotent replay. `npm run verify:browser -- http://127.0.0.1:8787` uses installed headless Chrome to click demo sign-in and inspect the Terminal, Portfolio, Orders, and System views. Both commands also accept the live Worker URL.
 
 ## Repository map
 
@@ -65,4 +65,4 @@ The dependency-free `npm run verify:deployment -- http://127.0.0.1:8787 full` sc
 | `docs/` | API contract, architecture, and threat model |
 | `app.html`, `lambda_function.py`, `tests/` | Retained v1 code and characterization tests; not used by the current Worker app |
 
-The portfolio presents cash plus **cost basis**, not a live-marked portfolio value. The app supports whole-share paper market orders, registered user accounts, and one-click demo user sign-in. It does not route real-money orders.
+The portfolio shows server-owned cash and realized P&L alongside live-marked equity and unrealized P&L when verified IEX quotes are available for every holding. The app supports whole-share paper market orders, registered user accounts, and one-click demo user sign-in. It does not route real-money orders.

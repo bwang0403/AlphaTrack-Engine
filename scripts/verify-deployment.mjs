@@ -76,13 +76,32 @@ if (mode === "full") {
   for (const side of ["BUY", "SELL"]) {
     const key = randomUUID();
     const first = await submit(side, key, 202);
+    assert.equal(first.order.idempotencyKey, key);
     const replay = await submit(side, key, 200);
     assert.equal(replay.replayed, true);
     assert.equal(first.order.id, replay.order.id);
     await waitForFill(first.order.id);
+    const history = await json("/api/orders", undefined, 200);
+    assert.equal(history.orders.find(order => order.id === first.order.id)?.idempotencyKey, key);
+    const single = await json(`/api/orders/${first.order.id}`, undefined, 200);
+    assert.equal(single.order.idempotencyKey, key);
   }
   const portfolio = await json("/api/portfolio", undefined, 200);
   assert.equal(portfolio.positions.length, 0);
+  assert.ok(Number.isSafeInteger(portfolio.realizedPnlCents));
+  const history = await json("/api/orders", undefined, 200);
+  const filled = history.orders.filter(order => order.status === "FILLED");
+  assert.equal(filled.length, 2);
+  const ledgerVersion = portfolio.version;
+  for (const order of filled) {
+    const replay = await submit(order.side, order.idempotencyKey, 200);
+    assert.equal(replay.replayed, true);
+    assert.equal(replay.order.id, order.id);
+  }
+  const afterReplay = await json("/api/portfolio", undefined, 200);
+  assert.equal(afterReplay.version, ledgerVersion);
+  assert.equal(afterReplay.cashCents, portfolio.cashCents);
+  assert.equal(afterReplay.realizedPnlCents, portfolio.realizedPnlCents);
   const final = await json("/api/system", undefined, 200);
   assert.equal(final.orderCounts.FILLED, 2);
 }

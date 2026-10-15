@@ -37,8 +37,9 @@ describe("D1 and Queue order pipeline", () => {
       method: "POST", headers: auth, body: JSON.stringify({ symbol: "NVDA", side, quantity: 2, idempotencyKey: key })
     });
     const buy = await submit("BUY", "buy-order-key-0001");
-    const buyBody = await buy.json() as { order: { id: string }; replayed: boolean };
+    const buyBody = await buy.json() as { order: { id: string; idempotencyKey: string }; replayed: boolean };
     expect(buy.status).toBe(202);
+    expect(buyBody.order.idempotencyKey).toBe("buy-order-key-0001");
     const buyReplay = await submit("BUY", "buy-order-key-0001");
     expect(buyReplay.status).toBe(200);
     expect(await buyReplay.json()).toMatchObject({ order: { id: buyBody.order.id }, replayed: true });
@@ -51,10 +52,12 @@ describe("D1 and Queue order pipeline", () => {
     await consume(messages[0]);
     await consume(messages[0]);
     const afterBuy = await route("/api/portfolio", { headers: { cookie } });
-    expect(await afterBuy.json()).toMatchObject({ cashCents: 9_975_000, positions: [{ quantity: 2 }] });
+    expect(await afterBuy.json()).toMatchObject({ cashCents: 9_975_000, realizedPnlCents: 0, positions: [{ quantity: 2 }] });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify({ latestTrade: { p: 135, t: "2026-09-16T20:00:00Z" } }), { status: 200 })));
     const sell = await submit("SELL", "sell-order-key-0001");
-    const sellBody = await sell.json() as { order: { id: string } };
+    const sellBody = await sell.json() as { order: { id: string; idempotencyKey: string } };
     expect(sell.status).toBe(202);
+    expect(sellBody.order.idempotencyKey).toBe("sell-order-key-0001");
     const sellReplay = await submit("SELL", "sell-order-key-0001");
     expect(sellReplay.status).toBe(200);
     expect(await sellReplay.json()).toMatchObject({ order: { id: sellBody.order.id }, replayed: true });
@@ -62,9 +65,18 @@ describe("D1 and Queue order pipeline", () => {
     await consume(messages[1]);
     await consume(messages[1]);
     const portfolio = await route("/api/portfolio", { headers: { cookie } });
-    expect(await portfolio.json()).toMatchObject({ cashCents: 10_000_000, positions: [] });
+    expect(await portfolio.json()).toMatchObject({ cashCents: 10_002_000, realizedPnlCents: 2_000, positions: [] });
     const orders = await route("/api/orders", { headers: { cookie } });
-    expect((await orders.json() as { orders: Array<{ status: string }> }).orders.map(order => order.status)).toEqual(["FILLED", "FILLED"]);
+    const orderHistory = (await orders.json() as { orders: Array<{ status: string; idempotencyKey: string }> }).orders;
+    expect(orderHistory.map(order => order.status)).toEqual(["FILLED", "FILLED"]);
+    expect(orderHistory.map(order => order.idempotencyKey)).toEqual(["sell-order-key-0001", "buy-order-key-0001"]);
+    const single = await route(`/api/orders/${buyBody.order.id}`, { headers: { cookie } });
+    expect(await single.json()).toMatchObject({ order: { id: buyBody.order.id, idempotencyKey: "buy-order-key-0001" } });
+    const filledReplay = await submit("SELL", "sell-order-key-0001");
+    expect(filledReplay.status).toBe(200);
+    expect(await filledReplay.json()).toMatchObject({ replayed: true, order: { id: sellBody.order.id } });
+    expect((await (await route("/api/portfolio", { headers: { cookie } })).json())).toMatchObject({ cashCents: 10_002_000, realizedPnlCents: 2_000 });
+    expect(messages).toHaveLength(2);
     const system = await route("/api/system", { headers: { cookie } });
     expect(await system.json()).toMatchObject({ database: "ok", session: { authenticated: true }, orderCounts: { FILLED: 2, PENDING: 0 } });
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM trades").get() as { count: number }).count).toBe(2);
@@ -115,9 +127,11 @@ describe("D1 and Queue order pipeline", () => {
     expect((await route("/api/system", { headers: { cookie: anotherCookie } })).status).toBe(200);
     expect((await requireSession(new Request("https://example.com", { headers: { cookie: anotherCookie } }), env)).userId).not.toBe(registered.user.id);
     expect(await (await route("/api/orders", { headers: { cookie: anotherCookie } })).json()).toEqual({ orders: [] });
+    expect((await route(`/api/orders/${(await registeredOrder.json() as { order: { id: string } }).order.id}`, { headers: { cookie: anotherCookie } })).status).toBe(404);
+    expect(await (await route("/api/portfolio", { headers: { cookie: anotherCookie } })).json()).toMatchObject({ realizedPnlCents: 0 });
   });
 
-  it("rejects overspending without changing cash, positions, or trades", async () => {
+  it("rejects overspending and computes realized P&L from weighted-cost partial sells", async () => {
     const { env, messages, sqlite } = setup();
     const { session } = await createSession(env, true);
     await submitOrder(env, session.accountId, { symbol: "NVDA", side: "BUY", quantity: 1000, idempotencyKey: "expensive-order-01" });
@@ -125,6 +139,20 @@ describe("D1 and Queue order pipeline", () => {
     expect((await listOrders(env, session.accountId))[0]).toMatchObject({ status: "REJECTED", rejectionReason: "Insufficient buying power" });
     expect((await getPortfolio(env, session.accountId)).cashCents).toBe(10_000_000);
     expect((sqlite.prepare("SELECT COUNT(*) AS count FROM trades").get() as { count: number }).count).toBe(0);
+    for (const [price, key, side, quantity] of [
+      [100, "first-weighted-buy", "BUY", 2],
+      [150, "second-weighted-buy", "BUY", 2],
+      [200, "partial-profit-sell", "SELL", 1]
+    ] as const) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ latestTrade: { p: price, t: "2026-09-16T20:00:00Z" } }))));
+      await submitOrder(env, session.accountId, { symbol: "NVDA", side, quantity, idempotencyKey: key });
+      await executeOrder(env, messages.at(-1)!);
+    }
+    expect(await getPortfolio(env, session.accountId)).toMatchObject({
+      cashCents: 9_970_000,
+      realizedPnlCents: 7_500,
+      positions: [{ symbol: "NVDA", quantity: 3, averageCostCents: 12_500 }]
+    });
   });
 
   it("rejects a reused idempotency key with a different order payload", async () => {

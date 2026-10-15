@@ -52,7 +52,7 @@ Market reads are rate limited per Cloudflare-supplied client address. Excess req
 
 ### `GET /api/portfolio`
 
-Requires an authenticated user session. Returns integer-cent cash, ledger version, and server-owned positions for that `user_id`. The client never submits balances or positions.
+Requires an authenticated user session. Returns integer-cent `cashCents`, `realizedPnlCents`, ledger `version`, and server-owned `positions` for that `user_id`. `realizedPnlCents` is cumulative profit/loss from that user's filled sells, reconstructed in fill order using the same rounded weighted-average cost basis as the ledger. It is `0` until a sell fills. The client never submits balances or positions.
 
 ## Orders
 
@@ -81,7 +81,11 @@ Only positive whole-share quantities are accepted. Price, balance, account ID, s
 
 ### `GET /api/orders`
 
-Returns up to 100 orders for the authenticated user. Internal account IDs and idempotency keys are not included.
+Returns up to 100 orders for the authenticated user. Each order includes its original `idempotencyKey` so the owner can replay the same symbol, side, and quantity. Internal account IDs are not returned.
+
+### `GET /api/orders/:id`
+
+Returns `{ "order": ... }` for one order owned by the authenticated user, including its `idempotencyKey`. An absent order or another user's order returns `404 ORDER_NOT_FOUND`.
 
 Order states are `PENDING`, `PROCESSING`, `FILLED`, and `REJECTED`; there is no separate `QUEUED` or `FAILED` state.
 

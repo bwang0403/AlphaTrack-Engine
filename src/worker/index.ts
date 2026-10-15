@@ -1,6 +1,6 @@
 import { ApiError, json, problem, readJson } from "./http";
 import { AlpacaMarketData } from "./market";
-import { executeOrder, getPortfolio, listOrders, recoverStalledOrders, submitOrder } from "./orders";
+import { executeOrder, getOrder, getPortfolio, listOrders, recoverStalledOrders, submitOrder } from "./orders";
 import { enforceRateLimit, requestClientKey } from "./rate-limit";
 import { createSession, loginUser, logoutUser, parseCredentials, registerUser, requireSession } from "./session";
 import type { Env, OrderCommand } from "./types";
@@ -53,6 +53,9 @@ const worker: ExportedHandler<Env, OrderCommand> = {
       } else if (url.pathname === "/api/orders" && request.method === "GET") {
         const session = await requireSession(request, env);
         response = json({ orders: await listOrders(env, session.userId) });
+      } else if (url.pathname.startsWith("/api/orders/") && request.method === "GET") {
+        const session = await requireSession(request, env);
+        response = json({ order: await getOrder(env, session.userId, url.pathname.slice("/api/orders/".length)) });
       } else if (url.pathname === "/api/orders" && request.method === "POST") {
         const session = await requireSession(request, env);
         await enforceRateLimit(env, session.userId, { scope: "order:create", limit: 30, windowSeconds: 60 });
