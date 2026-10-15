@@ -32,14 +32,13 @@ describe("browser API client", () => {
     expect(init.body).not.toContain("accountId");
   });
 
-  it("creates a session only after an authentication failure", async () => {
+  it("requires explicit sign-in and never creates an account automatically", async () => {
     const fetcher = vi.fn()
-      .mockResolvedValueOnce(response({ error: { code: "SESSION_REQUIRED", message: "missing" } }, 401))
-      .mockResolvedValueOnce(response({ session: { expiresAt: "future" } }, 201));
+      .mockResolvedValueOnce(response({ error: { code: "SESSION_REQUIRED", message: "missing" } }, 401));
     vi.stubGlobal("fetch", fetcher);
-    await ensureSession();
-    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/session", { credentials: "same-origin" });
-    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/session", { credentials: "same-origin", method: "POST" });
+    await expect(ensureSession()).rejects.toMatchObject({ status: 401 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith("/api/auth/me", { credentials: "same-origin" });
   });
 
   it("preserves structured API error details", async () => {

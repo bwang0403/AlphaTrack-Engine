@@ -14,6 +14,7 @@ export function testEnvironment() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(new URL("../migrations/0001_initial.sql", import.meta.url), "utf8"));
   sqlite.exec(readFileSync(new URL("../migrations/0002_rate_limits.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../migrations/0003_users.sql", import.meta.url), "utf8"));
   const messages: OrderCommand[] = [];
 
   function prepare(sql: string): Statement {

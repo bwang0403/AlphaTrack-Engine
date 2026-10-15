@@ -12,11 +12,15 @@ All v2 routes are same-origin under `/api`. Successful and error bodies are stri
 }
 ```
 
-## Sessions
+## Authentication and sessions
+
+`POST /api/auth/register` accepts JSON `{ "username": "alice", "passcode": "at-least-ten-characters" }`, creates a registered user and paper ledger, and returns `201` with a user ID, username, and session expiry. `POST /api/auth/login` accepts the same fields and returns `200` with a new session cookie. Duplicate usernames return `409`; invalid credentials return `401`. Both routes are rate limited.
+
+`POST /api/auth/demo` creates a demo user with a server-owned `user_id` and isolated ledger, then signs that user in with the same cookie mechanism. `GET /api/auth/me` verifies the current cookie and returns the user ID, account kind, and expiry. `POST /api/auth/logout` removes the token hash and clears the cookie.
 
 ### `POST /api/session`
 
-Creates an isolated paper account with `$100,000.00`, persists a hash of an opaque session token, and sets an HTTP-only, same-site cookie. Production cookies are also `Secure`.
+Compatibility alias for one-click demo sign-in. Creates an isolated paper user and account with `$100,000.00`, persists a peppered hash of an opaque session token bound to `user_id`, and sets an HTTP-only, same-site cookie. Production cookies are also `Secure`.
 
 Returns `201` with session expiry and starting cash. The raw token and account ID are not returned in JSON.
 
@@ -24,7 +28,7 @@ Session creation is limited per Cloudflare-supplied client address. Excess reque
 
 ### `GET /api/session`
 
-Validates the current cookie. Returns `200` with session expiry or `401` when missing or expired.
+Compatibility alias for `GET /api/auth/me`. Returns `200` with authenticated user identity and session expiry or `401` when missing or expired.
 
 ## Market data
 
@@ -48,13 +52,13 @@ Market reads are rate limited per Cloudflare-supplied client address. Excess req
 
 ### `GET /api/portfolio`
 
-Requires a demo session. Returns integer-cent cash, ledger version, and server-owned positions. The client never submits balances or positions.
+Requires an authenticated user session. Returns integer-cent cash, ledger version, and server-owned positions for that `user_id`. The client never submits balances or positions.
 
 ## Orders
 
 ### `POST /api/orders`
 
-Requires `Content-Type: application/json` and a demo session.
+Requires `Content-Type: application/json` and an authenticated user session.
 
 ```json
 {
@@ -73,11 +77,11 @@ Only positive whole-share quantities are accepted. Price, balance, account ID, s
 - `400`: validation failed.
 - `401`: session missing or expired.
 - `415`: body is not JSON.
-- `429`: the authenticated demo account exceeded the order submission limit.
+- `429`: the authenticated user exceeded the order submission limit.
 
 ### `GET /api/orders`
 
-Returns up to 100 orders for the authenticated demo account. Internal account IDs and idempotency keys are not included.
+Returns up to 100 orders for the authenticated user. Internal account IDs and idempotency keys are not included.
 
 Order states are `PENDING`, `PROCESSING`, `FILLED`, and `REJECTED`; there is no separate `QUEUED` or `FAILED` state.
 
@@ -86,6 +90,10 @@ Order states are `PENDING`, `PROCESSING`, `FILLED`, and `REJECTED`; there is no 
 ### `GET /api/health`
 
 Checks Worker and D1 reachability and returns environment and timestamp. It does not expose secrets or internal resource identifiers.
+
+### `GET /api/system`
+
+Requires authentication. Returns current D1 order-state counts scoped to the authenticated user, D1 reachability, session kind and expiry, configured Queue binding status, and the effective rate-limit policy. Queue and DLQ depth are `null` when unavailable, rather than invented. The client separately fetches current Alpaca market data, provenance, and freshness for the System view.
 
 ## Legacy contract
 

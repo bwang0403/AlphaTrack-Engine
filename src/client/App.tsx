@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiClientError, api, ensureSession, type MarketSnapshot, type Order, type Portfolio } from "./api";
+import { ApiClientError, api, type AuthState, type MarketSnapshot, type Order, type Portfolio, type SystemStatus } from "./api";
 import { PriceChart } from "./Chart";
 
 type View = "market" | "portfolio" | "orders" | "system";
@@ -15,6 +15,9 @@ export default function App() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [health, setHealth] = useState<{ status: string; environment: string; timestamp: string } | null>(null);
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [system, setSystem] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -39,7 +42,6 @@ export default function App() {
 
   const refreshAccount = useCallback(async () => {
     try {
-      await ensureSession();
       const [portfolioResult, orderResult] = await Promise.all([api.portfolio(), api.orders()]);
       setPortfolio(portfolioResult);
       setOrders(orderResult.orders);
@@ -49,11 +51,46 @@ export default function App() {
   }, []);
 
   useEffect(() => { void loadMarket(); }, [loadMarket]);
-  useEffect(() => { void refreshAccount(); }, [refreshAccount]);
   useEffect(() => {
-    if (view !== "system") return;
-    api.health().then(setHealth).catch(cause => setError(formatError(cause)));
-  }, [view]);
+    api.me().then(setAuth).catch(cause => {
+      if (!(cause instanceof ApiClientError && cause.status === 401)) setError(formatError(cause));
+    }).finally(() => setAuthLoading(false));
+  }, []);
+  useEffect(() => { if (auth) void refreshAccount(); }, [auth, refreshAccount]);
+  useEffect(() => {
+    if (view !== "system" || !auth) return;
+    let active = true;
+    const refresh = () => {
+      api.health().then(result => { if (active) setHealth(result); }).catch(cause => { if (active) setError(formatError(cause)); });
+      api.system().then(result => { if (active) setSystem(result); }).catch(cause => { if (active) setError(formatError(cause)); });
+      api.market(symbol, period).then(result => { if (active) setMarket(result); }).catch(cause => { if (active) { setMarket(null); setError(formatError(cause)); } });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [view, auth, symbol, period]);
+
+  async function authenticate(action: "demo" | "register" | "login", username: string, passcode: string) {
+    setError(null);
+    try {
+      const next = action === "demo" ? await api.demo() : action === "register" ? await api.register(username, passcode) : await api.login(username, passcode);
+      setAuth(next);
+    } catch (cause) {
+      setError(formatError(cause));
+    }
+  }
+
+  async function signOut() {
+    try {
+      await api.logout();
+      setAuth(null);
+      setPortfolio(null);
+      setOrders([]);
+      setSystem(null);
+    } catch (cause) {
+      setError(formatError(cause));
+    }
+  }
 
   const cashAndCostBasisCents = useMemo(() => (portfolio?.cashCents ?? 0) + (portfolio?.positions ?? []).reduce(
     (total, position) => total + position.averageCostCents * position.quantity,
@@ -81,7 +118,6 @@ export default function App() {
     const idempotencyKey = pendingIdempotencyKey.current ?? crypto.randomUUID();
     pendingIdempotencyKey.current = idempotencyKey;
     try {
-      await ensureSession();
       const result = await api.submitOrder({
         symbol,
         side,
@@ -123,7 +159,7 @@ export default function App() {
           <span>⌕</span><input value={search} onChange={event => setSearch(event.target.value.toUpperCase())} aria-label="Search ticker" maxLength={10} />
           <kbd>ENTER</kbd>
         </form>
-        <div className="market-state"><span className={`status-dot ${market ? "online" : "offline"}`} />{market ? `${market.provider.toUpperCase()} · ${market.freshness}` : "DATA OFFLINE"}</div>
+        <div className="market-state"><span className={`status-dot ${market ? "online" : "offline"}`} />{market ? `${market.provider.toUpperCase()} · ${market.freshness}` : "DATA OFFLINE"}{auth && <button className="signout" onClick={signOut}>SIGN OUT</button>}</div>
       </header>
 
       <aside className="sidebar">
@@ -133,6 +169,7 @@ export default function App() {
           <NavButton active={view === "orders"} label="Orders" glyph="↕" onClick={() => setView("orders")} />
           <NavButton active={view === "system"} label="System" glyph="◉" onClick={() => setView("system")} />
         </nav>
+        {auth && <button className="sidebar-signout" onClick={signOut}>SIGN OUT</button>}
         <div className="watchlist">
           <p className="eyebrow">WATCHLIST</p>
           {WATCHLIST.map(item => <button key={item} className={item === symbol ? "selected" : ""} onClick={() => { setSearch(item); setSymbol(item); setView("market"); }}><strong>{item}</strong><span>›</span></button>)}
@@ -142,14 +179,40 @@ export default function App() {
 
       <main>
         {error && <div className="alert"><strong>REQUEST FAILED</strong><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
-        {view === "market" && <MarketView market={market} symbol={symbol} period={period} loading={loading} quantity={quantity} side={side} orderMessage={orderMessage} submitting={submittingOrder}
+        {authLoading ? <div className="loading">CHECKING SIGN-IN…</div> : !auth ? <AuthView onAuthenticate={authenticate} /> : view === "market" && <MarketView market={market} symbol={symbol} period={period} loading={loading} quantity={quantity} side={side} orderMessage={orderMessage} submitting={submittingOrder}
           onPeriod={setPeriod} onQuantity={setQuantity} onSide={setSide} onOrder={placeOrder} />}
-        {view === "portfolio" && <PortfolioView portfolio={portfolio} cashAndCostBasisCents={cashAndCostBasisCents} onRefresh={refreshAccount} />}
-        {view === "orders" && <OrdersView orders={orders} onRefresh={refreshAccount} />}
-        {view === "system" && <SystemView health={health} market={market} />}
+        {auth && view === "portfolio" && <PortfolioView portfolio={portfolio} cashAndCostBasisCents={cashAndCostBasisCents} onRefresh={refreshAccount} />}
+        {auth && view === "orders" && <OrdersView orders={orders} onRefresh={refreshAccount} />}
+        {auth && view === "system" && <SystemView health={health} system={system} market={market} onRefresh={() => {
+          api.system().then(setSystem).catch(cause => setError(formatError(cause)));
+          api.market(symbol, period).then(setMarket).catch(cause => { setMarket(null); setError(formatError(cause)); });
+        }} />}
       </main>
     </div>
   );
+}
+
+function AuthView({ onAuthenticate }: { onAuthenticate: (action: "demo" | "register" | "login", username: string, passcode: string) => Promise<void> }) {
+  const [username, setUsername] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  async function submit(action: "demo" | "register" | "login") {
+    if (busy) return;
+    setBusy(true);
+    try { await onAuthenticate(action, username, passcode); } finally { setBusy(false); }
+  }
+  return <section className="panel auth-panel"><p className="eyebrow">SECURE PAPER TRADING</p><h1>Sign in to AlphaTrack</h1>
+    <p>Open an instant demo account, or register a username to return to your own paper portfolio.</p>
+    <button className="demo-button" disabled={busy} onClick={() => void submit("demo")}>INSTANT DEMO ACCOUNT SIGN-IN →</button>
+    <div className="auth-divider">OR USE YOUR ACCOUNT</div>
+    <form onSubmit={event => { event.preventDefault(); void submit(mode); }}>
+      <label>USERNAME<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} minLength={3} maxLength={32} required /></label>
+      <label>PASSCODE<input type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} value={passcode} onChange={event => setPasscode(event.target.value)} minLength={10} maxLength={128} required /></label>
+      <button className="submit-order buy" disabled={busy}>{mode === "login" ? "SIGN IN" : "CREATE ACCOUNT"}</button>
+    </form>
+    <button className="auth-switch" onClick={() => setMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Need an account? Register" : "Already registered? Sign in"}</button>
+  </section>;
 }
 
 function NavButton({ active, label, glyph, onClick }: { active: boolean; label: string; glyph: string; onClick: () => void }) {
@@ -210,11 +273,12 @@ function OrdersView({ orders, onRefresh }: { orders: Order[]; onRefresh: () => v
     <section className="panel table-panel"><table><thead><tr><th>ORDER / TIME</th><th>SYMBOL</th><th>SIDE</th><th>QUANTITY</th><th>STATUS</th><th>FILL</th></tr></thead><tbody>{orders.length ? orders.map(order => <tr key={order.id}><td><strong>{order.id.slice(0, 8)}</strong><small>{formatTime(order.requestedAt)}</small></td><td><strong>{order.symbol}</strong></td><td className={order.side === "BUY" ? "positive" : "negative"}>{order.side}</td><td>{order.quantity}</td><td><span className={`order-status ${order.status.toLowerCase()}`}>{order.status}</span>{order.rejectionReason && <small>{order.rejectionReason}</small>}</td><td>{order.filledPriceCents ? formatCents(order.filledPriceCents) : "—"}</td></tr>) : <tr><td colSpan={6} className="empty-row">No orders have been submitted.</td></tr>}</tbody></table></section></>;
 }
 
-function SystemView({ health, market }: { health: { status: string; environment: string; timestamp: string } | null; market: MarketSnapshot | null }) {
-  return <><PageHeading eyebrow="OPERATIONS" title="System health" />
-    <div className="metric-grid"><Metric label="API" value={health?.status.toUpperCase() ?? "CHECKING"} good={health?.status === "ok"} /><Metric label="ENVIRONMENT" value={health?.environment.toUpperCase() ?? "—"} /><Metric label="MARKET PROVIDER" value={market ? "CONNECTED" : "UNAVAILABLE"} good={Boolean(market)} /><Metric label="DATA FRESHNESS" value={market?.freshness ?? "—"} good={market?.freshness === "LIVE"} /></div>
-    <section className="panel system-copy"><p className="eyebrow">DATA PROVENANCE</p><h2>{market?.provider.toUpperCase() ?? "Provider unavailable"}</h2><ul><li>Feed: {market?.feed.toUpperCase() ?? "unavailable"}; quote freshness: {market?.freshness ?? "unavailable"}.</li><li>Quote source time: {market ? formatTime(market.asOf) : "unavailable"}.</li><li>Received by API: {market ? formatTime(market.receivedAt) : "unavailable"}.</li><li>Provider failure shows an error; no synthetic replacement prices.</li></ul></section>
-    <section className="panel system-copy"><p className="eyebrow">ARCHITECTURE · CONFIGURED, NOT LIVE QUEUE TELEMETRY</p><h2>Order safety</h2><ul><li>Cloudflare Worker → D1 order record → Queue → serialized consumer → D1 ledger.</li><li>States: PENDING → PROCESSING → FILLED or REJECTED; failed attempts retry with a dead-letter queue.</li><li>Account-scoped idempotency key and one trade per order prevent duplicate fills.</li><li>Server selects price and owns cash, positions, and anonymous demo-session identity.</li><li>API requests are rate limited. Cash and positions use integer cents and database constraints.</li></ul></section></>;
+function SystemView({ health, system, market, onRefresh }: { health: { status: string; environment: string; timestamp: string } | null; system: SystemStatus | null; market: MarketSnapshot | null; onRefresh: () => void }) {
+  return <><PageHeading eyebrow="OPERATIONS" title="System health" action={onRefresh} />
+    <div className="metric-grid"><Metric label="API / D1" value={health?.status === "ok" && system?.database === "ok" ? "ONLINE" : "CHECKING"} good={health?.status === "ok" && system?.database === "ok"} /><Metric label="SIGNED-IN USER" value={system?.session.kind.toUpperCase() ?? "CHECKING"} good={system?.session.authenticated} /><Metric label="MARKET FEED" value={market?.feed.toUpperCase() ?? "UNAVAILABLE"} good={Boolean(market)} /><Metric label="DATA FRESHNESS" value={market?.freshness ?? "UNAVAILABLE"} good={market?.freshness === "LIVE"} /></div>
+    <section className="panel system-copy"><p className="eyebrow">LIVE D1 ORDER STATES · YOUR ACCOUNT</p><h2>Order pipeline</h2><div className="metric-grid">{(["PENDING", "PROCESSING", "FILLED", "REJECTED"] as const).map(status => <Metric key={status} label={status} value={system ? String(system.orderCounts[status]) : "—"} />)}</div><p>Observed {system ? formatTime(system.observedAt) : "—"} · Queue configured: {system?.queue.configured ? "YES" : "UNKNOWN"} · Queue depth: {system?.queue.depth ?? "unavailable"} · DLQ depth: {system?.queue.dlqDepth ?? "unavailable"}</p></section>
+    <section className="panel system-copy"><p className="eyebrow">LIVE MARKET PROVENANCE</p><h2>{market?.provider.toUpperCase() ?? "Provider unavailable"}</h2><ul><li>Feed: {market?.feed.toUpperCase() ?? "unavailable"}; quote freshness: {market?.freshness ?? "unavailable"}.</li><li>Quote source time: {market ? formatTime(market.asOf) : "unavailable"}.</li><li>Received by API: {market ? formatTime(market.receivedAt) : "unavailable"}.</li><li>Provider failure shows an error; no synthetic replacement prices.</li></ul></section>
+    <section className="panel system-copy"><p className="eyebrow">AUTHENTICATION AND RATE LIMITS</p><h2>Runtime policy</h2><ul><li>Authenticated user: {system?.session.userId.slice(0, 8) ?? "—"} · {system?.session.kind ?? "—"} · expires {system ? formatTime(system.session.expiresAt) : "—"}.</li><li>Order submissions: {system?.rateLimits.ordersPerMinute ?? "—"} per minute; market reads: {system?.rateLimits.marketPerMinute ?? "—"} per minute.</li><li>Registration: {system?.rateLimits.registrationPerHour ?? "—"} per hour; login: {system?.rateLimits.loginPerHour ?? "—"} per hour; instant demo: {system?.rateLimits.demoPerHour ?? "—"} per hour.</li></ul></section></>;
 }
 
 function PageHeading({ eyebrow, title, action }: { eyebrow: string; title: string; action?: () => void }) {

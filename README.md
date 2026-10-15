@@ -9,13 +9,13 @@ The engineering focus is order correctness under retries: one account-scoped ide
 ```text
 React/TypeScript terminal
   ├─ GET /api/market/:symbol ──> Cloudflare Worker ──> Alpaca IEX
-  └─ demo session / portfolio / orders ──> Worker ──> D1
+  └─ registration / sign-in / portfolio / orders ──> Worker ──> D1
                                                └─> Cloudflare Queue
                                                       └─> order consumer ──> D1 ledger
                                                                └─> dead-letter queue after retry exhaustion
 ```
 
-The Worker serves the built frontend and API from one origin. `wrangler.jsonc` binds D1, the order queue, a dead-letter queue, and scheduled recovery. Queue consumption is configured with one concurrent invocation and batches of up to ten messages; the handler processes each message sequentially. The System view explains this configured architecture and displays API and market-data observations. It is **not** a live queue-depth monitor.
+The Worker serves the built frontend and API from one origin. `wrangler.jsonc` binds D1, the order queue, a dead-letter queue, and scheduled recovery. Queue consumption is configured with one concurrent invocation and batches of up to ten messages; the handler processes each message sequentially. The System view fetches current D1 order-state counts, authenticated-user status, rate-limit policies, API/D1 health, and Alpaca provenance and freshness every 30 seconds. Queue and DLQ depth are marked unavailable because Cloudflare does not expose those metrics through the current Worker bindings.
 
 ## Order lifecycle and idempotency
 
@@ -26,11 +26,11 @@ The Worker serves the built frontend and API from one origin. `wrangler.jsonc` b
 
 Orders use these states: `PENDING → PROCESSING → FILLED` or `REJECTED`. There is no separate `QUEUED` or `FAILED` state. The queue can deliver a message more than once; the D1 trade constraint and transaction guard prevent a second cash or position mutation for the same order.
 
-## Ledger and session security
+## Ledger and authentication
 
-D1 stores cash, average cost, and fill prices as integer cents. Schema `CHECK` constraints prohibit negative account cash or position quantity. Every portfolio and order query is scoped to the account ID obtained from a validated session cookie; the client does not send account IDs, cash, holdings, or execution prices.
+D1 stores cash, average cost, and fill prices as integer cents. Schema `CHECK` constraints prohibit negative account cash or position quantity. Every portfolio and order query is scoped to the authenticated `user_id` obtained from a validated session cookie; the client does not send user IDs, cash, holdings, or execution prices. The account ID is the user's ID, so one user owns one isolated paper ledger.
 
-A new **anonymous demo session** gets a 32-byte cryptographically random token. The browser receives it in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS). D1 stores only its SHA-256 hash combined with a Worker secret pepper. These are isolated demo accounts, **not registered user identities or a general login system**. Session creation, market reads, and order submissions have D1-backed rate limits; client addresses are pepper-hashed before storage.
+Users may register with a username and passcode, sign in later, or choose **Instant Demo Account Sign-In** for immediate recruiter access. Registered passcodes are salted and peppered with 210,000-iteration PBKDF2-SHA-256 before storage. Each sign-in receives a 32-byte cryptographically random session token in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS). D1 stores only a peppered SHA-256 token hash and binds that session to a `user_id`. Demo users use the same user and session tables, with a fresh isolated paper ledger. Registration, login, demo sign-in, market reads, and order submissions have D1-backed rate limits; client addresses are pepper-hashed before storage.
 
 ## Market-data provenance
 
@@ -48,9 +48,11 @@ npm run typecheck
 npm run build
 ```
 
-`npm test` runs **35 deterministic tests** without AWS, Alpaca, or other network calls. The suite covers validation, provider failures, session verification, rate-limit keys, integer-cent ledger policy, and an in-memory SQLite execution of the actual D1 migrations. The pipeline tests exercise buy/sell fills, idempotent replay, duplicate queue delivery, overdraft rejection, and recovery of a stalled claim while the original worker resumes. GitHub Actions runs the same TypeScript tests, type-check, and build, plus separate characterization tests for the retained legacy Python Lambda.
+`npm test` is the **primary suite: exactly 35 deterministic TypeScript tests**, without AWS, Alpaca, or other network calls. It covers validation, provider failures, registration/login/session verification, rate-limit keys, integer-cent ledger policy, and in-memory SQLite execution of the actual D1 migrations. A request-to-ledger test exercises the Worker HTTP router, demo authentication, buy and sell submissions, Queue consumer, D1 fills, and idempotent replay of **both** sides. Other tests cover duplicate queue delivery, overdraft rejection, and recovery of a stalled claim while the original worker resumes. GitHub Actions runs the same TypeScript tests, type-check, and build. The separate Python suite characterizes retained v1 code and is not part of the 35-test TypeScript count.
 
 For development, run `npm run dev:api` and `npm run dev` in separate terminals. Vite serves the UI at `http://127.0.0.1:5173` and proxies `/api` to the local Worker. The current deployment and environment bindings are in `wrangler.jsonc`; secrets are configured in Cloudflare and never committed.
+
+The dependency-free `npm run verify:deployment -- http://127.0.0.1:8787 full` script checks the built page, health, demo authentication, System API, Alpaca IEX data, and HTTP-to-queue buy/sell fills with idempotent replay. `npm run verify:browser -- http://127.0.0.1:8787` uses installed headless Chrome to click the demo sign-in and inspect the rendered System view. Both commands also accept the live Worker URL.
 
 ## Repository map
 
@@ -63,4 +65,4 @@ For development, run `npm run dev:api` and `npm run dev` in separate terminals. 
 | `docs/` | API contract, architecture, and threat model |
 | `app.html`, `lambda_function.py`, `tests/` | Retained v1 code and characterization tests; not used by the current Worker app |
 
-The portfolio presents cash plus **cost basis**, not a live-marked portfolio value. The app supports whole-share paper market orders and anonymous seven-day demo sessions. It has no user registration, consolidated SIP feed, or real-money execution.
+The portfolio presents cash plus **cost basis**, not a live-marked portfolio value. The app supports whole-share paper market orders, registered user accounts, and one-click demo user sign-in. It does not route real-money orders.

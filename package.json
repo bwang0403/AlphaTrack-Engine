@@ -13,7 +13,9 @@
     "cf:typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply alphatrack-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply alphatrack-db --remote",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "verify:deployment": "node scripts/verify-deployment.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs"
   },
   "dependencies": {
     "react": "latest",

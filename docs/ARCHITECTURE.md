@@ -4,7 +4,7 @@
 
 AlphaTrack v2 prioritizes correctness and demonstrable failure handling over simulated visual activity. The system must preserve these invariants:
 
-1. A `(demo account, idempotency key)` pair identifies at most one order.
+1. A `(user-owned account, idempotency key)` pair identifies at most one order.
 2. One accepted order can create at most one trade.
 3. Cash and position quantities cannot become negative.
 4. The server selects execution prices and owns every balance mutation.
@@ -14,11 +14,11 @@ AlphaTrack v2 prioritizes correctness and demonstrable failure handling over sim
 
 ### React client
 
-The client renders market data, paper-order entry, positions, order history, and system state. It creates an opaque demo session through a same-origin HTTP-only cookie. It sends only an order symbol, side, whole-share quantity, and idempotency key.
+The client renders market data, paper-order entry, positions, order history, and live system observations. It offers username/passcode registration and login plus one-click demo user sign-in. It sends only an order symbol, side, whole-share quantity, and idempotency key.
 
 ### Worker API
 
-The Worker owns validation, session authentication, provider access, response shaping, and persistence. API errors use a stable code, safe message, and request ID. Provider credentials are Worker secrets and are never sent to the client.
+The Worker owns validation, user authentication, session verification, provider access, response shaping, and persistence. Registered passcodes use salted, peppered PBKDF2-SHA-256; a 256-bit random cookie token is verified against its peppered hash in D1 and bound to a `user_id`. API errors use a stable code, safe message, and request ID. Provider credentials are Worker secrets and are never sent to the client.
 
 ### Alpaca adapter
 
@@ -28,7 +28,7 @@ The adapter requests the free IEX feed, normalizes bars, rejects invalid timesta
 
 Money is stored as integer cents and the initial paper balance is `$100,000.00`. The schema separates accounts, sessions, orders, positions, and immutable trades. Unique constraints enforce session and order identities.
 
-D1 also stores fixed-window counters for session creation, market reads, and order submission. Cloudflare's trusted client-address header scopes anonymous limits; authenticated order limits use the server-owned account ID. A daily scheduled handler removes expired sessions, anonymous accounts older than 30 days with no active session, and old rate-limit buckets.
+D1 also stores fixed-window counters for registration, login, demo sign-in, market reads, and order submission. Cloudflare's trusted client-address header scopes unauthenticated limits; authenticated order limits use the verified `user_id`. A daily scheduled handler removes expired sessions, old inactive demo users with no trade records and their accounts, and old rate-limit buckets; traded accounts retain their immutable ledger records.
 
 ### Queue worker
 
@@ -53,6 +53,6 @@ Queue concurrency is set to one for this single-ledger demo. The database's uniq
 - Only whole-share market orders are supported.
 - Market bars use Alpaca's free IEX feed, not consolidated SIP data.
 - The portfolio screen currently reports cash plus cost basis; live portfolio valuation will be added only when every position has a verified current quote.
-- Sessions are anonymous seven-day demo sessions, not identity-provider accounts.
-- The System view describes configured architecture and observed API/market state, not live queue depth.
+- Username/passcode accounts and one-click demo user sign-in use seven-day sessions; password recovery and third-party identity providers are not implemented.
+- The System view fetches live D1 order counts, session status, rate-limit policies, and market observations. Queue and DLQ depth remain unavailable through the current Worker binding.
 - The legacy Python Lambda remains in the repository during migration and is not used by the v2 Worker.
